@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Letter Portal ✨</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lora:ital,wght@0,400;1,400&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="login-body">
+
+  <!-- Background -->
+  <canvas id="starsCanvas"></canvas>
+  <div class="ambient-glow"></div>
+  <div class="particles-wrap" id="particlesWrap"></div>
+
+  <!-- Portal transition overlay -->
+  <div id="portalOverlay">
+    <div class="portal-ring"></div>
+    <div class="portal-ring"></div>
+    <div class="portal-ring"></div>
+    <div class="portal-ring"></div>
+  </div>
+
+  <!-- Main content -->
+  <main class="login-container">
+
+    <!-- Envelope -->
+    <div class="envelope-wrap" id="envelopeWrap">
+      <div class="envelope" id="envelope">
+        <div class="envelope-letter-slip"></div>
+      </div>
+    </div>
+
+    <h1 class="login-title">A small letter<br>waits for you ✨</h1>
+    <p class="login-subtitle">Some feelings arrive quietly.</p>
+
+    <div class="login-box">
+
+      <div class="input-wrap">
+        <input
+          type="password"
+          id="secretCode"
+          placeholder="Enter your secret code..."
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <span class="input-key-icon">🔑</span>
+      </div>
+
+      <button class="open-btn" id="openBtn">
+        <span class="btn-text">Open Letter</span>
+        <span class="btn-spinner" aria-hidden="true">
+          <span class="spinner-dot"></span>
+          <span class="spinner-dot"></span>
+          <span class="spinner-dot"></span>
+        </span>
+      </button>
+
+      <p class="login-feedback" id="feedbackText" aria-live="polite"></p>
+      <div class="error-mascot" id="errorMascot">(•ᴗ•) no peeking 👀</div>
+
+    </div>
+
+  </main>
+
+  <script src="letters.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

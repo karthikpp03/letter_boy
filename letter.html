@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Your Letter ✨</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lora:ital,wght@0,400;1,400&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="letter-body">
+
+  <!-- Background -->
+  <canvas id="starsCanvas"></canvas>
+  <div class="ambient-glow"></div>
+  <div class="particles-wrap" id="particlesWrap"></div>
+
+  <!-- Letter page -->
+  <main class="letter-page">
+    <div class="paper" id="paper">
+
+      <div class="paper-light"></div>
+
+      <h1 class="paper-name" id="personName"></h1>
+      <hr class="paper-rule"/>
+
+      <div id="letterContent"></div>
+
+      <p class="paper-sign">— with quiet care ✨</p>
+
+      <!-- Reply section -->
+      <section class="reply-section">
+
+        <h2 class="reply-title">Official Safe Zone Unlocked 🔓</h2>
+
+        <p class="reply-invite">
+          Funny ah irundhalum…<br>
+          deep ah irundhalum…<br>
+          unsaid things ah irundhalum…<br><br>
+          sollu :)
+        </p>
+
+        <div class="textarea-wrap">
+          <textarea
+            id="replyInput"
+            placeholder="Type your message here..."
+            autocorrect="off"
+            spellcheck="false"
+          ></textarea>
+        </div>
+
+        <button class="send-btn" id="sendBtn">Send Message ✨</button>
+
+        <p id="statusText"></p>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- Mascot delivery scene -->
+  <div class="mascot-scene hidden" id="mascotScene">
+
+    <div class="mascot-stars" id="mascotStars"></div>
+    <div class="mascot-ground"></div>
+    <div class="portal-mailbox"></div>
+
+    <div class="mascot-char" id="mascotChar">(•ᴗ•)</div>
+    <div class="mascot-letter" id="mascotLetter"></div>
+
+    <div class="mascot-wave" id="mascotWave">👋</div>
+
+    <div class="delivery-text" id="deliveryText">
+      Message safely delivered to Karthik ✨
+    </div>
+
+  </div>
+
+  <script src="letters.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
