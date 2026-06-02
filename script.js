@@ -1,8 +1,9 @@
 /**
- * LETTER PORTAL — script.js
- * ─────────────────────────
+ * LETTER PORTAL — script.js v2
+ * ─────────────────────────────
+ * Deep cinematic polish edition.
  * Handles: login flow, letter display, reply sending,
- * mascot animation, background effects.
+ * mascot animation, background effects, portal-close flow.
  */
 
 /* ══════════════════════════════
@@ -19,12 +20,12 @@ function initStars() {
   function resize() {
     W = canvas.width = window.innerWidth;
     H = canvas.height = window.innerHeight;
-    stars = Array.from({ length: 130 }, () => ({
+    stars = Array.from({ length: 150 }, () => ({
       x: Math.random() * W,
       y: Math.random() * H,
-      r: Math.random() * 1.3 + 0.2,
+      r: Math.random() * 1.4 + 0.2,
       a: Math.random(),
-      speed: Math.random() * 0.4 + 0.1,
+      speed: Math.random() * 0.35 + 0.08,
       twinkle: Math.random() * Math.PI * 2,
     }));
   }
@@ -33,9 +34,9 @@ function initStars() {
     ctx.clearRect(0, 0, W, H);
     const now = Date.now() / 1000;
     stars.forEach(s => {
-      s.y -= s.speed * 0.15;
-      if (s.y < -2) s.y = H + 2;
-      const alpha = s.a * (0.5 + 0.5 * Math.sin(now * 1.2 + s.twinkle));
+      s.y -= s.speed * 0.12;
+      if (s.y < -2) { s.y = H + 2; s.x = Math.random() * W; }
+      const alpha = s.a * (0.45 + 0.55 * Math.sin(now * 1.1 + s.twinkle));
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(255,255,255,${alpha})`;
@@ -52,21 +53,44 @@ function initStars() {
 function initParticles() {
   const wrap = document.getElementById('particlesWrap');
   if (!wrap) return;
-  const count = window.innerWidth < 600 ? 10 : 18;
+  const count = window.innerWidth < 600 ? 12 : 20;
   for (let i = 0; i < count; i++) {
     const p = document.createElement('div');
-    p.className = 'particle';
+    p.className = 'particle' + (Math.random() > 0.85 ? ' gold' : '');
     const size = Math.random() * 3 + 1.5;
     p.style.cssText = `
       width:${size}px;
       height:${size}px;
       left:${Math.random() * 100}%;
-      --dur:${10 + Math.random() * 12}s;
-      --delay:${-Math.random() * 15}s;
-      --dx:${(Math.random() - 0.5) * 80}px;
+      --dur:${10 + Math.random() * 14}s;
+      --delay:${-Math.random() * 18}s;
+      --dx:${(Math.random() - 0.5) * 90}px;
       opacity:0;
     `;
     wrap.appendChild(p);
+  }
+}
+
+/* Intensify particles on success */
+function burstParticles() {
+  const wrap = document.getElementById('particlesWrap');
+  if (!wrap) return;
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 4 + 2;
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${35 + Math.random() * 30}%;
+      bottom: 0;
+      --dur:${4 + Math.random() * 4}s;
+      --delay:${Math.random() * 0.5}s;
+      --dx:${(Math.random() - 0.5) * 120}px;
+      opacity:0;
+      background: ${Math.random() > 0.5 ? 'var(--pink)' : 'var(--gold)'};
+    `;
+    wrap.appendChild(p);
+    setTimeout(() => p.remove(), 8000);
   }
 }
 
@@ -78,12 +102,13 @@ function initParticles() {
 async function initLoginPage() {
   const letters = await loadLetters();
 
-  const input      = document.getElementById('secretCode');
-  const btn        = document.getElementById('openBtn');
-  const feedback   = document.getElementById('feedbackText');
-  const errorMascot= document.getElementById('errorMascot');
-  const envelope   = document.getElementById('envelope');
-  const overlay    = document.getElementById('portalOverlay');
+  const input       = document.getElementById('secretCode');
+  const btn         = document.getElementById('openBtn');
+  const feedback    = document.getElementById('feedbackText');
+  const errorMascot = document.getElementById('errorMascot');
+  const envelope    = document.getElementById('envelope');
+  const overlay     = document.getElementById('portalOverlay');
+  const ambientGlow = document.getElementById('ambientGlow');
 
   function setFeedback(msg, type = 'error') {
     feedback.textContent = msg;
@@ -93,26 +118,23 @@ async function initLoginPage() {
   function showError(msg) {
     setFeedback(msg, 'error');
 
-    // Shake input
     input.classList.remove('shake');
-    void input.offsetWidth; // reflow
+    void input.offsetWidth;
     input.classList.add('shake');
     input.addEventListener('animationend', () => input.classList.remove('shake'), { once: true });
 
-    // Envelope react
     envelope.classList.remove('error-glow');
     void envelope.offsetWidth;
     envelope.classList.add('error-glow');
     setTimeout(() => envelope.classList.remove('error-glow'), 1200);
 
-    // Error mascot
     errorMascot.classList.add('visible');
-    setTimeout(() => errorMascot.classList.remove('visible'), 3000);
+    setTimeout(() => errorMascot.classList.remove('visible'), 3200);
   }
 
   function triggerPortalTransition(callback) {
     overlay.classList.add('active');
-    setTimeout(callback, 850);
+    setTimeout(callback, 950);
   }
 
   async function openLetter() {
@@ -123,17 +145,30 @@ async function initLoginPage() {
       return;
     }
 
-    // Success state
+    // 1. Input glows
+    input.classList.add('glow-success');
+
+    // 2. Button goes loading
     btn.classList.add('loading');
     setFeedback('', 'success');
-    envelope.classList.add('success-glow');
-    envelope.classList.add('open'); // flap opens
 
-    // Slight delay, then portal
-    await sleep(600);
+    // 3. Envelope success glow + flap opens
+    await sleep(180);
+    envelope.classList.add('success-glow');
+    await sleep(250);
+    envelope.classList.add('open');
+
+    // 4. Ambient intensify + particle burst
+    if (ambientGlow) ambientGlow.classList.add('intensify');
+    burstParticles();
+
+    // 5. Slight breathe, then portal
+    await sleep(500);
 
     triggerPortalTransition(() => {
       sessionStorage.setItem('letterCode', code);
+      // Mark as intentional navigation (not a refresh)
+      sessionStorage.setItem('portalOpen', '1');
       window.location.href = 'letter.html';
     });
   }
@@ -142,6 +177,11 @@ async function initLoginPage() {
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') openLetter();
   });
+
+  // Auto-focus on desktop
+  if (window.innerWidth >= 600) {
+    setTimeout(() => input.focus(), 600);
+  }
 }
 
 
@@ -153,29 +193,38 @@ async function initLetterPage() {
   const letters = await loadLetters();
 
   const code = sessionStorage.getItem('letterCode');
-  if (!code || !letters[code]) {
-    window.location.href = 'index.html';
+  const portalOpen = sessionStorage.getItem('portalOpen');
+
+  // ── PORTAL CLOSE FLOW ──
+  // If no valid code OR no portal-open flag (direct nav / refresh), close cinematically
+  if (!code || !letters[code] || !portalOpen) {
+    sessionStorage.removeItem('letterCode');
+    sessionStorage.removeItem('portalOpen');
+    showPortalCloseAndRedirect();
     return;
   }
 
+  // Clear the portal-open flag so refresh will trigger the close flow
+  sessionStorage.removeItem('portalOpen');
+
   const data = letters[code];
 
-  // Name
+  // ── Name ──
   const nameEl = document.getElementById('personName');
   nameEl.textContent = `Dear ${data.name}`;
 
-  // Letter lines
+  // ── Letter content with line-by-line reveal ──
   const contentEl = document.getElementById('letterContent');
   const lines = data.letter.trim().split('\n');
   lines.forEach((line, i) => {
     const p = document.createElement('p');
     p.classList.add('line');
-    p.style.animationDelay = `${i * 0.13 + 0.3}s`;
-    p.textContent = line;
+    p.style.animationDelay = `${i * 0.11 + 0.4}s`;
+    p.textContent = line; // empty lines become spacers via min-height in CSS
     contentEl.appendChild(p);
   });
 
-  // Telegram config — replace with your real token
+  // ── Telegram config ──
   const TELEGRAM_BOT_TOKEN = '8807520611:AAHw3Up1WqiCCn94gC473fn03mt6rfCL66Q';
   const TELEGRAM_CHAT_ID   = '5399876396';
 
@@ -193,7 +242,6 @@ async function initLetterPage() {
       return;
     }
 
-    // Sending state
     sendBtn.classList.add('sending');
     sendBtn.textContent = 'Sending... ✨';
     sendBtn.disabled = true;
@@ -248,6 +296,31 @@ ${message}`;
 
 
 /* ══════════════════════════════
+   PORTAL CLOSE ANIMATION
+   (cinematic refresh / redirect)
+══════════════════════════════ */
+
+function showPortalCloseAndRedirect() {
+  // Hide the main letter page content if any
+  const letterPage = document.querySelector('.letter-page');
+  if (letterPage) letterPage.style.opacity = '0';
+
+  const overlay = document.getElementById('portalCloseOverlay');
+  if (!overlay) {
+    window.location.href = 'index.html';
+    return;
+  }
+
+  overlay.classList.add('active');
+
+  // After the cinematic moment, redirect
+  setTimeout(() => {
+    window.location.href = 'index.html';
+  }, 2200);
+}
+
+
+/* ══════════════════════════════
    MASCOT ANIMATION
 ══════════════════════════════ */
 
@@ -257,23 +330,23 @@ function showMascot(recipientName) {
 
   if (!scene) return;
 
-  // Populate twinkling stars
   const starsWrap = document.getElementById('mascotStars');
   if (starsWrap) {
     starsWrap.innerHTML = '';
     const positions = [
       [15,20],[30,10],[55,15],[70,8],[85,18],
       [10,40],[42,35],[68,30],[90,25],[25,55],
-      [60,50],[78,45],[20,70],[50,65],[80,60]
+      [60,50],[78,45],[20,70],[50,65],[80,60],
+      [38,25],[65,18],[48,42]
     ];
     positions.forEach(([left, top], i) => {
       const star = document.createElement('div');
       star.className = 'mascot-star';
-      star.textContent = '✦';
+      star.textContent = ['✦','✧','⋆','·'][i % 4];
       star.style.cssText = `
         left:${left}%; top:${top}%;
-        animation-delay:${i * 0.18}s;
-        font-size:${0.7 + Math.random() * 0.6}rem;
+        animation-delay:${i * 0.16}s;
+        font-size:${0.6 + Math.random() * 0.7}rem;
       `;
       starsWrap.appendChild(star);
     });
@@ -283,7 +356,7 @@ function showMascot(recipientName) {
 
   scene.classList.remove('hidden');
 
-  // Reset char/letter animation by cloning
+  // Reset animations by cloning
   ['mascotChar', 'mascotLetter'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -291,10 +364,9 @@ function showMascot(recipientName) {
     el.parentNode.replaceChild(clone, el);
   });
 
-  // Hide after 7.5s
   setTimeout(() => {
     scene.classList.add('hidden');
-  }, 7500);
+  }, 7800);
 }
 
 

@@ -1,29 +1,42 @@
 /**
- * LETTER PORTAL — letters.js
+ * LETTER PORTAL — letters.js v2
  *
- * HOW TO UPDATE LETTERS FROM TELEGRAM:
+ * HOW TO UPDATE LETTERS:
  * ─────────────────────────────────────
- * Option 1 (easiest): Edit this file directly.
- *   Add/edit entries in the LETTERS object below.
+ * Option 1 (easiest): Edit the LETTERS object below directly.
  *
- * Option 2 (remote JSON):
- *   Host a raw JSON file on GitHub Gist or any URL,
+ * Option 2 (dynamic / remote):
+ *   Host a raw JSON file on GitHub Gist (or any CORS-enabled URL),
  *   then set REMOTE_LETTERS_URL below.
- *   Format of the JSON must match the LETTERS object.
+ *
+ *   Example GitHub Gist workflow:
+ *   1. Go to gist.github.com → New gist
+ *   2. Paste your JSON (matching the LETTERS structure)
+ *   3. Click "Create public gist"
+ *   4. Click "Raw" → copy that URL
+ *   5. Paste it as REMOTE_LETTERS_URL below
  *
  * Option 3 (Telegram-driven):
- *   Use a Telegram Bot webhook + a small Cloudflare Worker
- *   to write JSON to a Gist, then set the URL below.
+ *   Use a Telegram Bot + Cloudflare Worker to auto-update a Gist,
+ *   then set the Gist raw URL below.
  *
- * LETTER STRUCTURE:
+ * LETTER FORMAT:
  *   "CODE": {
  *     name: "Display Name 🌙",
- *     letter: `Multi-line text here...`
+ *     letter: `Multi-line emotional message here.
+ *
+ * Blank lines become spacer lines in the letter.
+ * Each line is revealed with a cinematic animation.`
  *   }
+ *
+ * TIPS:
+ *   - Empty lines create breathing space (dramatic pauses).
+ *   - Keep lines short for emotional rhythm.
+ *   - No hard limit on letter length — the paper scales gracefully.
  */
 
-// Optional: set a URL to a remote JSON file to load letters from.
-// Leave as null to use only the LETTERS object below.
+// Set a GitHub Gist raw URL here to enable remote dynamic letters.
+// Leave as null to use only the hardcoded LETTERS object below.
 const REMOTE_LETTERS_URL = null;
 
 const LETTERS = {
@@ -146,18 +159,28 @@ Thank you for existing da 😭`
 };
 
 /**
- * Loads letters — from remote URL if set, otherwise uses LETTERS above.
- * Always resolves with a letters object.
+ * Loads letters — from remote URL if configured, otherwise uses local LETTERS.
+ * Always resolves with a valid letters object.
+ * Supports long multiline letters with graceful fallback.
  */
 async function loadLetters() {
   if (!REMOTE_LETTERS_URL) return LETTERS;
+
   try {
-    const res = await fetch(REMOTE_LETTERS_URL);
-    if (!res.ok) throw new Error("fetch failed");
+    const res = await fetch(REMOTE_LETTERS_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    return data;
+
+    // Validate basic structure
+    if (typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Invalid format');
+    }
+
+    // Merge with local as fallback (remote overrides local)
+    return { ...LETTERS, ...data };
+
   } catch (e) {
-    console.warn("Remote letters failed, using local.", e);
+    console.warn('[Letter Portal] Remote letters failed, using local.', e);
     return LETTERS;
   }
 }
