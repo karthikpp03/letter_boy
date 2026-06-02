@@ -1033,3 +1033,136 @@ textarea::placeholder {
 @media (min-width: 768px) {
   .paper { padding: 52px 58px; }
 }
+
+
+/* ══════════════════════════════
+   REOPEN SCREEN
+   Shown when a faded memory is accessed again.
+══════════════════════════════ */
+
+.reopen-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 24px;
+  gap: 18px;
+  min-height: 340px;
+}
+
+.reopen-icon {
+  font-size: 3rem;
+  animation: reopenIconFloat 3s ease-in-out infinite;
+}
+
+@keyframes reopenIconFloat {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+.reopen-title {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: clamp(1.2rem, 3vw, 1.6rem);
+  color: var(--ink);
+  font-weight: 400;
+  line-height: 1.4;
+  max-width: 360px;
+}
+
+.reopen-sub {
+  font-family: 'Lora', serif;
+  font-size: clamp(0.85rem, 2vw, 0.95rem);
+  color: var(--ink3);
+  line-height: 1.75;
+  white-space: pre-line;
+  max-width: 320px;
+}
+
+.reopen-btn {
+  margin-top: 8px;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, rgba(255,179,207,0.15), rgba(167,139,250,0.12));
+  border: 1.5px solid rgba(255,179,207,0.35);
+  border-radius: 50px;
+  color: var(--ink);
+  font-family: 'Lora', serif;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.35s var(--ease-smooth);
+  letter-spacing: 0.03em;
+}
+
+.reopen-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(255,179,207,0.25), rgba(167,139,250,0.2));
+  border-color: rgba(255,179,207,0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255,179,207,0.2);
+}
+
+.reopen-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.reopen-btn.sent {
+  border-color: rgba(163,240,192,0.5);
+  color: var(--ink2);
+}
+
+.reopen-status {
+  font-family: 'Lora', serif;
+  font-style: italic;
+  font-size: 0.85rem;
+  color: var(--ink3);
+  min-height: 20px;
+}
+
+.reopen-back {
+  margin-top: 4px;
+  font-family: 'Lora', serif;
+  font-size: 0.82rem;
+  color: var(--ink3);
+  text-decoration: none;
+  opacity: 0.65;
+  transition: opacity 0.25s ease;
+  letter-spacing: 0.02em;
+}
+
+.reopen-back:hover { opacity: 1; }
+
+@keyframes reopenGlow {
+  0%,100% { box-shadow: 0 0 0 rgba(255,179,207,0); }
+  50%      { box-shadow: 0 0 20px rgba(255,179,207,0.3); }
+}
+
+
+/* ══════════════════════════════
+   MEMORY FADE ANIMATION
+   After comment submitted — paper fades away
+══════════════════════════════ */
+
+.paper.fading-memory {
+  transition: all 1.2s ease;
+  filter: blur(3px) saturate(0.3);
+  opacity: 0.5;
+  transform: scale(0.97) translateY(8px);
+}
+
+.paper.faded-memory {
+  transition: all 1.4s ease;
+  filter: blur(8px) saturate(0);
+  opacity: 0;
+  transform: scale(0.9) translateY(20px);
+}
+
+
+/* ══════════════════════════════
+   MOBILE — additions
+══════════════════════════════ */
+
+@media (max-width: 600px) {
+  .reopen-screen { padding: 28px 16px; min-height: 280px; }
+  .reopen-title  { font-size: 1.15rem; }
+}

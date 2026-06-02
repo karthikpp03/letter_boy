@@ -1,24 +1,64 @@
 /**
- * LETTER PORTAL — script.js v2
- * ─────────────────────────────
- * Deep cinematic polish edition.
- * Handles: login flow, letter display, reply sending,
- * mascot animation, background effects, portal-close flow.
+ * LETTER PORTAL — script.js v3
+ * ─────────────────────────────────
+ * Full state machine edition.
+ * - Memory states: active → opened → faded → reopen_requested → reopened_once → expired
+ * - One-time read logic with localStorage persistence
+ * - Reopen request system (Telegram notification)
+ * - Edge case handling (refresh before/after comment)
+ * - Admin route support
+ * - Existing UI/animations preserved completely
  */
 
 /* ══════════════════════════════
-   SHARED BACKGROUND FX
+   CONFIG
+══════════════════════════════ */
+
+const WORKER_URL = 'https://letterboy-api.zeus-karthik11.workers.dev';
+const TELEGRAM_BOT_TOKEN = '8807520611:AAHw3Up1WqiCCn94gC473fn03mt6rfCL66Q';
+const TELEGRAM_CHAT_ID   = '5399876396';
+
+/* ══════════════════════════════
+   LOCAL STATE HELPERS
+   Persists memory state per-code in localStorage.
+   Server (Worker) is the source of truth for state;
+   localStorage is a client-side cache / guard.
+══════════════════════════════ */
+
+const LS_PREFIX = 'lp_';
+
+function lsKey(code) { return LS_PREFIX + code; }
+
+function getLocalState(code) {
+  try {
+    const raw = localStorage.getItem(lsKey(code));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setLocalState(code, obj) {
+  try {
+    localStorage.setItem(lsKey(code), JSON.stringify(obj));
+  } catch {}
+}
+
+function mergeLocalState(code, patch) {
+  const existing = getLocalState(code) || {};
+  setLocalState(code, { ...existing, ...patch });
+}
+
+/* ══════════════════════════════
+   SHARED BACKGROUND FX  (unchanged)
 ══════════════════════════════ */
 
 function initStars() {
   const canvas = document.getElementById('starsCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  let stars = [];
-  let W, H;
+  let stars = [], W, H;
 
   function resize() {
-    W = canvas.width = window.innerWidth;
+    W = canvas.width  = window.innerWidth;
     H = canvas.height = window.innerHeight;
     stars = Array.from({ length: 150 }, () => ({
       x: Math.random() * W,
@@ -45,8 +85,7 @@ function initStars() {
     requestAnimationFrame(draw);
   }
 
-  resize();
-  draw();
+  resize(); draw();
   window.addEventListener('resize', resize);
 }
 
@@ -59,8 +98,7 @@ function initParticles() {
     p.className = 'particle' + (Math.random() > 0.85 ? ' gold' : '');
     const size = Math.random() * 3 + 1.5;
     p.style.cssText = `
-      width:${size}px;
-      height:${size}px;
+      width:${size}px; height:${size}px;
       left:${Math.random() * 100}%;
       --dur:${10 + Math.random() * 14}s;
       --delay:${-Math.random() * 18}s;
@@ -71,7 +109,6 @@ function initParticles() {
   }
 }
 
-/* Intensify particles on success */
 function burstParticles() {
   const wrap = document.getElementById('particlesWrap');
   if (!wrap) return;
@@ -82,12 +119,12 @@ function burstParticles() {
     p.style.cssText = `
       width:${size}px; height:${size}px;
       left:${35 + Math.random() * 30}%;
-      bottom: 0;
+      bottom:0;
       --dur:${4 + Math.random() * 4}s;
       --delay:${Math.random() * 0.5}s;
       --dx:${(Math.random() - 0.5) * 120}px;
       opacity:0;
-      background: ${Math.random() > 0.5 ? 'var(--pink)' : 'var(--gold)'};
+      background:${Math.random() > 0.5 ? 'var(--pink)' : 'var(--gold)'};
     `;
     wrap.appendChild(p);
     setTimeout(() => p.remove(), 8000);
@@ -110,6 +147,14 @@ async function initLoginPage() {
   const overlay     = document.getElementById('portalOverlay');
   const ambientGlow = document.getElementById('ambientGlow');
 
+  // Pre-fill code from URL if present: /letter/728194 or ?code=728194
+  const urlCode = getCodeFromURL();
+  if (urlCode && input) {
+    input.value = urlCode;
+    // Brief delay so user sees it filled, then auto-open
+    setTimeout(openLetter, 400);
+  }
+
   function setFeedback(msg, type = 'error') {
     feedback.textContent = msg;
     feedback.style.color = type === 'success' ? '#a3f0c0' : 'var(--pink)';
@@ -117,17 +162,14 @@ async function initLoginPage() {
 
   function showError(msg) {
     setFeedback(msg, 'error');
-
     input.classList.remove('shake');
     void input.offsetWidth;
     input.classList.add('shake');
     input.addEventListener('animationend', () => input.classList.remove('shake'), { once: true });
-
     envelope.classList.remove('error-glow');
     void envelope.offsetWidth;
     envelope.classList.add('error-glow');
     setTimeout(() => envelope.classList.remove('error-glow'), 1200);
-
     errorMascot.classList.add('visible');
     setTimeout(() => errorMascot.classList.remove('visible'), 3200);
   }
@@ -145,30 +187,57 @@ async function initLoginPage() {
       return;
     }
 
-    // 1. Input glows
-    input.classList.add('glow-success');
+    // Check local memory state
+    const localState = getLocalState(code);
+    const serverState = letters[code].state || 'active';
 
-    // 2. Button goes loading
+    // Determine effective state (local cache is more up-to-date for faded)
+    const effectiveState = (localState && localState.state) ? localState.state : serverState;
+
+    // If expired (permanently locked after reopen read)
+    if (effectiveState === 'expired') {
+      showError("this memory has faded forever 🌙");
+      return;
+    }
+
+    // If faded — show reopen screen instead of letter
+    if (effectiveState === 'faded') {
+      input.classList.add('glow-success');
+      btn.classList.add('loading');
+      await sleep(300);
+      triggerPortalTransition(() => {
+        sessionStorage.setItem('letterCode', code);
+        sessionStorage.setItem('portalOpen', '1');
+        sessionStorage.setItem('memoryFaded', '1');
+        window.location.href = 'letter.html';
+      });
+      return;
+    }
+
+    // If reopen_requested — still show faded (pending admin)
+    if (effectiveState === 'reopen_requested') {
+      showError("reopen request pending... 🌙");
+      return;
+    }
+
+    // Normal open flow (active or reopened_once)
+    input.classList.add('glow-success');
     btn.classList.add('loading');
     setFeedback('', 'success');
 
-    // 3. Envelope success glow + flap opens
     await sleep(180);
     envelope.classList.add('success-glow');
     await sleep(250);
     envelope.classList.add('open');
 
-    // 4. Ambient intensify + particle burst
     if (ambientGlow) ambientGlow.classList.add('intensify');
     burstParticles();
-
-    // 5. Slight breathe, then portal
     await sleep(500);
 
     triggerPortalTransition(() => {
       sessionStorage.setItem('letterCode', code);
-      // Mark as intentional navigation (not a refresh)
       sessionStorage.setItem('portalOpen', '1');
+      sessionStorage.removeItem('memoryFaded');
       window.location.href = 'letter.html';
     });
   }
@@ -178,7 +247,6 @@ async function initLoginPage() {
     if (e.key === 'Enter') openLetter();
   });
 
-  // Auto-focus on desktop
   if (window.innerWidth >= 600) {
     setTimeout(() => input.focus(), 600);
   }
@@ -192,71 +260,126 @@ async function initLoginPage() {
 async function initLetterPage() {
   const letters = await loadLetters();
 
-  const code = sessionStorage.getItem('letterCode');
+  const code       = sessionStorage.getItem('letterCode');
   const portalOpen = sessionStorage.getItem('portalOpen');
+  const memoryFaded = sessionStorage.getItem('memoryFaded');
 
-  // ── PORTAL CLOSE FLOW ──
-  // If no valid code OR no portal-open flag (direct nav / refresh), close cinematically
+  // No valid portal entry
   if (!code || !letters[code] || !portalOpen) {
     sessionStorage.removeItem('letterCode');
     sessionStorage.removeItem('portalOpen');
+    sessionStorage.removeItem('memoryFaded');
     showPortalCloseAndRedirect();
     return;
   }
 
-  // Clear the portal-open flag so refresh will trigger the close flow
+  // Clear portal open flag (so refresh triggers close)
   sessionStorage.removeItem('portalOpen');
 
-  const data = letters[code];
+  // ── FADED / REOPEN SCREEN ──
+  if (memoryFaded === '1') {
+    sessionStorage.removeItem('memoryFaded');
+    showReopenScreen(code, letters[code]);
+    return;
+  }
 
-  // ── Name ──
-  const nameEl = document.getElementById('personName');
+  const data = letters[code];
+  const localState = getLocalState(code) || {};
+  const effectiveState = localState.state || data.state || 'active';
+
+  // If already faded and somehow landed here, show reopen
+  if (effectiveState === 'faded' || effectiveState === 'expired') {
+    showReopenScreen(code, data);
+    return;
+  }
+
+  // ── NORMAL LETTER DISPLAY ──
+  renderLetter(code, data, effectiveState);
+}
+
+
+function renderLetter(code, data, state) {
+  const nameEl    = document.getElementById('personName');
+  const contentEl = document.getElementById('letterContent');
+
   nameEl.textContent = `Dear ${data.name}`;
 
-  // ── Letter content with line-by-line reveal ──
-  const contentEl = document.getElementById('letterContent');
   const lines = data.letter.trim().split('\n');
   lines.forEach((line, i) => {
     const p = document.createElement('p');
     p.classList.add('line');
     p.style.animationDelay = `${i * 0.11 + 0.4}s`;
-    p.textContent = line; // empty lines become spacers via min-height in CSS
+    p.textContent = line;
     contentEl.appendChild(p);
   });
 
-  // ── Telegram config ──
-  const TELEGRAM_BOT_TOKEN = '8807520611:AAHw3Up1WqiCCn94gC473fn03mt6rfCL66Q';
-  const TELEGRAM_CHAT_ID   = '5399876396';
-
+  // ── Reply section ──
   const sendBtn    = document.getElementById('sendBtn');
   const replyInput = document.getElementById('replyInput');
   const statusText = document.getElementById('statusText');
 
-  sendBtn.addEventListener('click', sendMessage);
-
-  async function sendMessage() {
-    const message = replyInput.value.trim();
-
-    if (message.length < 2) {
-      statusText.textContent = 'Write something first 🥲';
-      return;
-    }
-
-    sendBtn.classList.add('sending');
-    sendBtn.textContent = 'Sending... ✨';
+  // Check if comment already submitted this session
+  const localState = getLocalState(code) || {};
+  if (localState.commentSent && localState.state === 'faded') {
+    // Already faded — disable send, show message
     sendBtn.disabled = true;
-    statusText.textContent = '';
+    sendBtn.textContent = 'Memory faded ✨';
+    sendBtn.classList.add('sent');
+    statusText.textContent = 'This memory has been safely carried away.';
+    return;
+  }
 
-    const finalMessage =
-`✨ New Letter Reply
+  sendBtn.addEventListener('click', () => sendMessage(code, data, state));
+}
+
+
+async function sendMessage(code, data, state) {
+  const replyInput = document.getElementById('replyInput');
+  const sendBtn    = document.getElementById('sendBtn');
+  const statusText = document.getElementById('statusText');
+
+  const message = replyInput.value.trim();
+  if (message.length < 2) {
+    statusText.textContent = 'Write something first 🥲';
+    return;
+  }
+
+  sendBtn.classList.add('sending');
+  sendBtn.textContent = 'Sending... ✨';
+  sendBtn.disabled = true;
+  statusText.textContent = '';
+
+  // Determine if this is a reopened read
+  const localState = getLocalState(code) || {};
+  const isReopen   = (localState.state === 'reopened_once') || (data.state === 'reopened_once');
+  const nextState  = isReopen ? 'expired' : 'faded';
+  const stateLabel = isReopen ? '🔒 Final Read' : '💌 New Reply';
+
+  const finalMessage =
+`✨ ${stateLabel}
 ━━━━━━━━━━━━━━━━━━
 🔐 Code: ${code}
 👤 For: ${data.name}
 🕒 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+📊 State: ${state} → ${nextState}
 ━━━━━━━━━━━━━━━━━━
 💌 Message:
 ${message}`;
 
+  let success = false;
+
+  // Try Worker first (updates state on GitHub too)
+  try {
+    const res = await fetch(`${WORKER_URL}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name: data.name, message, nextState })
+    });
+    if (res.ok) success = true;
+  } catch (_) {}
+
+  // Fallback: direct Telegram
+  if (!success) {
     try {
       const res = await fetch(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -270,38 +393,181 @@ ${message}`;
           })
         }
       );
-
       const result = await res.json();
+      if (result.ok) success = true;
+    } catch (_) {}
+  }
 
-      if (result.ok) {
-        statusText.textContent = 'Delivered safely ✨';
-        sendBtn.classList.remove('sending');
-        sendBtn.classList.add('sent');
-        sendBtn.textContent = 'Sent ✓';
-        replyInput.value = '';
-        await sleep(300);
-        showMascot(data.name);
-      } else {
-        throw new Error('not ok');
-      }
+  if (success) {
+    // Persist faded state locally immediately
+    mergeLocalState(code, {
+      state: nextState,
+      commentSent: true,
+      fadedAt: Date.now()
+    });
 
-    } catch (err) {
-      statusText.textContent = 'Something went wrong, try again 🥲';
-      sendBtn.classList.remove('sending');
-      sendBtn.textContent = 'Send Message ✨';
-      sendBtn.disabled = false;
+    statusText.textContent = 'Delivered safely ✨';
+    sendBtn.classList.remove('sending');
+    sendBtn.classList.add('sent');
+    sendBtn.textContent = 'Sent ✓';
+    replyInput.value = '';
+
+    await sleep(300);
+    showMascot(data.name, () => {
+      // After mascot: trigger fade animation then lock
+      triggerMemoryFade(code, nextState);
+    });
+  } else {
+    statusText.textContent = 'Something went wrong, try again 🥲';
+    sendBtn.classList.remove('sending');
+    sendBtn.textContent = 'Send Message ✨';
+    sendBtn.disabled = false;
+  }
+}
+
+
+/* Memory fade — cinematic lock sequence after comment sent */
+function triggerMemoryFade(code, nextState) {
+  const paper = document.getElementById('paper');
+  if (paper) {
+    paper.classList.add('fading-memory');
+    setTimeout(() => {
+      paper.classList.add('faded-memory');
+    }, 1200);
+  }
+
+  // After fade, redirect back to index (memory locked)
+  setTimeout(() => {
+    sessionStorage.removeItem('letterCode');
+    showPortalCloseAndRedirect();
+  }, 4500);
+}
+
+
+/* ══════════════════════════════
+   REOPEN SCREEN
+   Shown when faded memory is accessed again.
+   Keeps existing emotional style, adds reopen CTA.
+══════════════════════════════ */
+
+function showReopenScreen(code, data) {
+  const letterPage = document.querySelector('.letter-page');
+  const paper      = document.getElementById('paper');
+
+  if (paper) {
+    // Clear existing content
+    paper.innerHTML = '';
+
+    const localState = getLocalState(code) || {};
+    const state = localState.state || data.state || 'faded';
+    const isExpired = state === 'expired';
+    const isPending = state === 'reopen_requested';
+
+    // Build the reopen card inside the existing paper
+    paper.classList.add('paper-light');
+    paper.innerHTML = `
+      <div class="paper-light"></div>
+      <div class="reopen-screen">
+        <div class="reopen-icon">${isExpired ? '🔒' : isPending ? '🌙' : '🌫️'}</div>
+        <h1 class="reopen-title">
+          ${isExpired
+            ? 'This memory has faded forever'
+            : isPending
+            ? 'Reopen request sent...'
+            : 'This memory has faded'}
+        </h1>
+        <p class="reopen-sub">
+          ${isExpired
+            ? 'Some memories are meant to be carried, not revisited.'
+            : isPending
+            ? 'Waiting for a quiet moment to reopen 🌙'
+            : 'You already read this once and left something behind.\nThe memory has been carried away.'}
+        </p>
+        ${(!isExpired && !isPending) ? `
+          <button class="reopen-btn" id="reopenBtn">Request Reopen 🌙</button>
+          <p class="reopen-status" id="reopenStatus"></p>
+        ` : ''}
+        <a href="index.html" class="reopen-back">← back to portal</a>
+      </div>
+    `;
+
+    if (!isExpired && !isPending) {
+      const reopenBtn    = document.getElementById('reopenBtn');
+      const reopenStatus = document.getElementById('reopenStatus');
+      reopenBtn.addEventListener('click', () => sendReopenRequest(code, data, reopenBtn, reopenStatus));
     }
   }
 }
 
 
+async function sendReopenRequest(code, data, btn, statusEl) {
+  btn.disabled = true;
+  btn.textContent = 'Sending request... 🌙';
+
+  const message =
+`🌙 Reopen Request
+━━━━━━━━━━━━━━━━━━
+🔐 Code: ${code}
+👤 For: ${data.name}
+🕒 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+━━━━━━━━━━━━━━━━━━
+They're asking to reopen their memory once.
+
+Reply with: REOPEN:${code}`;
+
+  let sent = false;
+
+  // Try Worker
+  try {
+    const res = await fetch(`${WORKER_URL}/reopen-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name: data.name })
+    });
+    if (res.ok) sent = true;
+  } catch (_) {}
+
+  // Fallback: direct Telegram
+  if (!sent) {
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: message,
+            parse_mode: 'HTML'
+          })
+        }
+      );
+      const result = await res.json();
+      if (result.ok) sent = true;
+    } catch (_) {}
+  }
+
+  if (sent) {
+    mergeLocalState(code, { state: 'reopen_requested', requestedAt: Date.now() });
+    btn.textContent = 'Request sent 🌙';
+    btn.classList.add('sent');
+    statusEl.textContent = 'Someone will read this and decide quietly.';
+
+    // Gentle shimmer animation on success
+    btn.style.animation = 'reopenGlow 1.8s ease infinite';
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Request Reopen 🌙';
+    statusEl.textContent = 'Something went wrong. Try again 🥲';
+  }
+}
+
+
 /* ══════════════════════════════
-   PORTAL CLOSE ANIMATION
-   (cinematic refresh / redirect)
+   PORTAL CLOSE ANIMATION  (unchanged)
 ══════════════════════════════ */
 
 function showPortalCloseAndRedirect() {
-  // Hide the main letter page content if any
   const letterPage = document.querySelector('.letter-page');
   if (letterPage) letterPage.style.opacity = '0';
 
@@ -312,8 +578,6 @@ function showPortalCloseAndRedirect() {
   }
 
   overlay.classList.add('active');
-
-  // After the cinematic moment, redirect
   setTimeout(() => {
     window.location.href = 'index.html';
   }, 2200);
@@ -321,14 +585,17 @@ function showPortalCloseAndRedirect() {
 
 
 /* ══════════════════════════════
-   MASCOT ANIMATION
+   MASCOT ANIMATION  (unchanged, now with callback)
 ══════════════════════════════ */
 
-function showMascot(recipientName) {
-  const scene      = document.getElementById('mascotScene');
-  const deliveryTxt= document.getElementById('deliveryText');
+function showMascot(recipientName, onComplete) {
+  const scene       = document.getElementById('mascotScene');
+  const deliveryTxt = document.getElementById('deliveryText');
 
-  if (!scene) return;
+  if (!scene) {
+    if (onComplete) setTimeout(onComplete, 500);
+    return;
+  }
 
   const starsWrap = document.getElementById('mascotStars');
   if (starsWrap) {
@@ -352,11 +619,9 @@ function showMascot(recipientName) {
     });
   }
 
-  deliveryTxt.textContent = `Message safely delivered ✨`;
-
+  deliveryTxt.textContent = 'Message safely delivered ✨';
   scene.classList.remove('hidden');
 
-  // Reset animations by cloning
   ['mascotChar', 'mascotLetter'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -366,7 +631,65 @@ function showMascot(recipientName) {
 
   setTimeout(() => {
     scene.classList.add('hidden');
+    if (onComplete) onComplete();
   }, 7800);
+}
+
+
+/* ══════════════════════════════
+   URL CODE EXTRACTION
+   Handles /letter/728194 and ?code=728194
+══════════════════════════════ */
+
+function getCodeFromURL() {
+  // Path: /letter/728194
+  const pathMatch = window.location.pathname.match(/\/letter\/(\d+)/);
+  if (pathMatch) return pathMatch[1];
+
+  // Query: ?code=728194
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('code')) return params.get('code');
+
+  return null;
+}
+
+
+/* ══════════════════════════════
+   RIGHT-CLICK GENTLE PROTECTION
+══════════════════════════════ */
+
+function initGentleProtection() {
+  document.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    // Soft emotional whisper instead of hard block
+    const whisper = document.createElement('div');
+    whisper.className = 'protection-whisper';
+    whisper.textContent = 'some things are meant to just be felt ✨';
+    whisper.style.cssText = `
+      position:fixed;
+      left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      background:rgba(8,8,16,0.92);
+      color:rgba(255,179,207,0.85);
+      font-family:'Lora',serif;
+      font-style:italic;
+      font-size:0.95rem;
+      padding:14px 22px;
+      border-radius:12px;
+      border:1px solid rgba(255,179,207,0.15);
+      pointer-events:none;
+      z-index:99999;
+      opacity:0;
+      transition:opacity 0.4s ease;
+      text-align:center;
+    `;
+    document.body.appendChild(whisper);
+    requestAnimationFrame(() => { whisper.style.opacity = '1'; });
+    setTimeout(() => {
+      whisper.style.opacity = '0';
+      setTimeout(() => whisper.remove(), 500);
+    }, 2200);
+  });
 }
 
 
@@ -374,12 +697,13 @@ function showMascot(recipientName) {
    UTILITY
 ══════════════════════════════ */
 
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function getPage() {
-  return window.location.pathname.split('/').pop().toLowerCase() || 'index.html';
+  const path = window.location.pathname;
+  // Handle /letter/728194 → index page with code
+  if (path.match(/\/letter\//)) return 'index.html';
+  return path.split('/').pop().toLowerCase() || 'index.html';
 }
 
 
@@ -390,6 +714,7 @@ function getPage() {
 window.addEventListener('DOMContentLoaded', () => {
   initStars();
   initParticles();
+  initGentleProtection();
 
   const page = getPage();
 

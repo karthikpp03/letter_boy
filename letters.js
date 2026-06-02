@@ -1,186 +1,89 @@
 /**
- * LETTER PORTAL — letters.js v2
+ * LETTER PORTAL — letters.js v3
  *
- * HOW TO UPDATE LETTERS:
- * ─────────────────────────────────────
- * Option 1 (easiest): Edit the LETTERS object below directly.
+ * Dynamic letter loading from GitHub raw JSON.
+ * Falls back to hardcoded LETTERS if fetch fails.
  *
- * Option 2 (dynamic / remote):
- *   Host a raw JSON file on GitHub Gist (or any CORS-enabled URL),
- *   then set REMOTE_LETTERS_URL below.
+ * Admin can update letters via Telegram → Cloudflare Worker → GitHub API.
  *
- *   Example GitHub Gist workflow:
- *   1. Go to gist.github.com → New gist
- *   2. Paste your JSON (matching the LETTERS structure)
- *   3. Click "Create public gist"
- *   4. Click "Raw" → copy that URL
- *   5. Paste it as REMOTE_LETTERS_URL below
- *
- * Option 3 (Telegram-driven):
- *   Use a Telegram Bot + Cloudflare Worker to auto-update a Gist,
- *   then set the Gist raw URL below.
- *
- * LETTER FORMAT:
- *   "CODE": {
- *     name: "Display Name 🌙",
- *     letter: `Multi-line emotional message here.
- *
- * Blank lines become spacer lines in the letter.
- * Each line is revealed with a cinematic animation.`
- *   }
- *
- * TIPS:
- *   - Empty lines create breathing space (dramatic pauses).
- *   - Keep lines short for emotional rhythm.
- *   - No hard limit on letter length — the paper scales gracefully.
+ * LETTER STATES:
+ *   active            → fresh, never opened with a comment
+ *   opened            → comment submitted, memory fading
+ *   faded             → permanently faded (one read used)
+ *   reopen_requested  → user requested reopen, pending admin approval
+ *   reopened_once     → admin approved one extra read
+ *   expired           → reopened, then faded again — permanently locked
  */
 
-// Set a GitHub Gist raw URL here to enable remote dynamic letters.
-// Leave as null to use only the hardcoded LETTERS object below.
-const REMOTE_LETTERS_URL = null;
+// GitHub raw URL for letters.json
+// Update this to point to your actual repo raw URL
+const GITHUB_RAW_URL =
+  'https://raw.githubusercontent.com/karthikpp03/letter_boy/main/letters.json';
 
-const LETTERS = {
-
+// Hardcoded fallback (matches letters.json)
+const LETTERS_FALLBACK = {
   "728194": {
     name: "Aishu ✨",
-    letter: `Sometimes...
-
-you seriously test my patience 😭
-
-but somehow...
-
-you still became one of the
-most comforting people in my life.
-
-Which honestly feels illegal.
-
-I know we joke too much
-instead of saying things properly.
-
-But genuinely...
-
-thank you for staying.
-
-Even during weird phases.
-Even during silent phases.
-
-And yes...
-
-you are still dramatic.`
+    theme: "moonlight",
+    state: "active",
+    reopen_count: 0,
+    letter: `Sometimes...\n\nyou seriously test my patience 😭\n\nbut somehow...\n\nyou still became one of the\nmost comforting people in my life.\n\nWhich honestly feels illegal.\n\nI know we joke too much\ninstead of saying things properly.\n\nBut genuinely...\n\nthank you for staying.\n\nEven during weird phases.\nEven during silent phases.\n\nAnd yes...\n\nyou are still dramatic.`
   },
-
   "441827": {
     name: "Moon Person 🌙",
-    letter: `You know what's funny?
-
-Some people become memories.
-
-But some people become
-specific comfort feelings.
-
-You're unfortunately that category 😭
-
-Even random conversations with you
-somehow became important to me.
-
-Also please sleep properly.
-
-This is a warning.`
+    theme: "default",
+    state: "active",
+    reopen_count: 0,
+    letter: `You know what's funny?\n\nSome people become memories.\n\nBut some people become\nspecific comfort feelings.\n\nYou're unfortunately that category 😭\n\nEven random conversations with you\nsomehow became important to me.\n\nAlso please sleep properly.\n\nThis is a warning.`
   },
-
   "991563": {
     name: "Chaos Partner 💫",
-    letter: `This letter was supposed to be mature.
-
-Then I remembered who this is for.
-
-Impossible.
-
-Still...
-
-thank you for every stupid joke,
-late night talk,
-random support,
-and emotional nonsense.
-
-Life would've genuinely felt
-more boring without you.`
+    theme: "default",
+    state: "active",
+    reopen_count: 0,
+    letter: `This letter was supposed to be mature.\n\nThen I remembered who this is for.\n\nImpossible.\n\nStill...\n\nthank you for every stupid joke,\nlate night talk,\nrandom support,\nand emotional nonsense.\n\nLife would've genuinely felt\nmore boring without you.`
   },
-
   "620145": {
     name: "Professional Idiot 🌸",
-    letter: `I still don't understand
-how someone can be this annoying
-and this lovable together.
-
-Honestly impressive.
-
-But yeah...
-
-despite all the chaos,
-I really appreciate you.
-
-Even if I don't always say it properly.`
+    theme: "default",
+    state: "active",
+    reopen_count: 0,
+    letter: `I still don't understand\nhow someone can be this annoying\nand this lovable together.\n\nHonestly impressive.\n\nBut yeah...\n\ndespite all the chaos,\nI really appreciate you.\n\nEven if I don't always say it properly.`
   },
-
   "843921": {
     name: "Tiny Disaster 🌙",
-    letter: `You entered my life
-very randomly.
-
-And somehow stayed important.
-
-That's still kinda crazy to me.
-
-Anyway...
-
-drink water.
-sleep properly.
-stop overthinking.
-
-Thank you ✨`
+    theme: "default",
+    state: "active",
+    reopen_count: 0,
+    letter: `You entered my life\nvery randomly.\n\nAnd somehow stayed important.\n\nThat's still kinda crazy to me.\n\nAnyway...\n\ndrink water.\nsleep properly.\nstop overthinking.\n\nThank you ✨`
   },
-
   "315780": {
     name: "Favorite Human ⭐",
-    letter: `If friendship had side effects...
-
-ours would definitely be:
-laughing too much
-and emotional confusion.
-
-But still...
-
-I wouldn't trade it for anything.
-
-Thank you for existing da 😭`
+    theme: "default",
+    state: "active",
+    reopen_count: 0,
+    letter: `If friendship had side effects...\n\nours would definitely be:\nlaughing too much\nand emotional confusion.\n\nBut still...\n\nI wouldn't trade it for anything.\n\nThank you for existing da 😭`
   }
-
 };
 
 /**
- * Loads letters — from remote URL if configured, otherwise uses local LETTERS.
- * Always resolves with a valid letters object.
- * Supports long multiline letters with graceful fallback.
+ * Fetch letters from GitHub raw JSON.
+ * Always resolves — falls back to hardcoded on any error.
  */
 async function loadLetters() {
-  if (!REMOTE_LETTERS_URL) return LETTERS;
-
   try {
-    const res = await fetch(REMOTE_LETTERS_URL, { cache: 'no-store' });
+    const res = await fetch(GITHUB_RAW_URL + '?t=' + Date.now(), {
+      cache: 'no-store'
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-
-    // Validate basic structure
     if (typeof data !== 'object' || Array.isArray(data)) {
       throw new Error('Invalid format');
     }
-
-    // Merge with local as fallback (remote overrides local)
-    return { ...LETTERS, ...data };
-
+    // Merge: remote overrides local fallback
+    return { ...LETTERS_FALLBACK, ...data };
   } catch (e) {
-    console.warn('[Letter Portal] Remote letters failed, using local.', e);
-    return LETTERS;
+    console.warn('[Letter Portal] Remote letters failed, using fallback.', e);
+    return LETTERS_FALLBACK;
   }
 }

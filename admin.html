@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Portal Admin 🌙</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Caveat:wght@600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg: #080810; --bg2: #0c0c18;
+      --pink: #ffb3cf; --pink-soft: #ffd9e8;
+      --purple: #a78bfa; --gold: #f5c97a;
+      --white: #fff;
+      --ink: #2b1a0e; --ink2: #4a321a; --ink3: #6b4c2a;
+      --paper: #f9edd6; --paper2: #f0dab5;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: 'Lora', serif;
+      background: var(--bg);
+      color: var(--white);
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ── LOGIN SCREEN ── */
+    #loginScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 16px;
+      padding: 24px;
+    }
+
+    .admin-login-title {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 1.6rem;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.04em;
+    }
+
+    .admin-key-input {
+      padding: 12px 18px;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,179,207,0.2);
+      border-radius: 50px;
+      color: var(--white);
+      font-family: 'Lora', serif;
+      font-size: 0.95rem;
+      width: 260px;
+      outline: none;
+      text-align: center;
+      transition: border-color 0.3s ease;
+    }
+    .admin-key-input:focus { border-color: rgba(255,179,207,0.5); }
+
+    .admin-login-btn {
+      padding: 11px 32px;
+      background: linear-gradient(135deg, rgba(255,179,207,0.12), rgba(167,139,250,0.1));
+      border: 1.5px solid rgba(255,179,207,0.3);
+      border-radius: 50px;
+      color: var(--white);
+      font-family: 'Lora', serif;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .admin-login-btn:hover {
+      background: linear-gradient(135deg, rgba(255,179,207,0.2), rgba(167,139,250,0.18));
+      border-color: rgba(255,179,207,0.5);
+    }
+
+    .login-error {
+      color: var(--pink);
+      font-style: italic;
+      font-size: 0.85rem;
+      min-height: 20px;
+    }
+
+    /* ── MAIN PANEL ── */
+    #adminPanel { display: none; }
+
+    .panel-header {
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid rgba(255,179,207,0.08);
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 1.3rem;
+      color: rgba(255,179,207,0.8);
+      letter-spacing: 0.05em;
+    }
+
+    .panel-logout {
+      font-family: 'Lora', serif;
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .panel-logout:hover { color: rgba(255,255,255,0.6); }
+
+    .panel-body {
+      padding: 28px;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 1rem;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    /* ── LETTERS GRID ── */
+    .letters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+      margin-bottom: 40px;
+    }
+
+    .letter-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,179,207,0.1);
+      border-radius: var(--radius);
+      padding: 18px;
+      transition: border-color 0.25s ease;
+    }
+    .letter-card:hover { border-color: rgba(255,179,207,0.22); }
+
+    .card-code {
+      font-family: 'Caveat', cursive;
+      font-size: 1.4rem;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+
+    .card-name {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 10px;
+    }
+
+    .card-state {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-style: italic;
+      margin-bottom: 14px;
+    }
+
+    .state-active        { background: rgba(163,240,192,0.1); color: #a3f0c0; border: 1px solid rgba(163,240,192,0.2); }
+    .state-faded         { background: rgba(167,139,250,0.1); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+    .state-expired       { background: rgba(255,100,100,0.08); color: #ff8080; border: 1px solid rgba(255,100,100,0.15); }
+    .state-reopen_requested { background: rgba(245,201,122,0.1); color: var(--gold); border: 1px solid rgba(245,201,122,0.2); }
+    .state-reopened_once { background: rgba(255,179,207,0.1); color: var(--pink); border: 1px solid rgba(255,179,207,0.2); }
+    .state-opened        { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.1); }
+
+    .card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .action-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-family: 'Lora', serif;
+      font-size: 0.75rem;
+      cursor: pointer;
+      border: 1px solid rgba(255,179,207,0.2);
+      background: rgba(255,179,207,0.06);
+      color: rgba(255,255,255,0.7);
+      transition: all 0.25s ease;
+    }
+    .action-btn:hover { background: rgba(255,179,207,0.14); color: var(--white); }
+    .action-btn.danger { border-color: rgba(255,100,100,0.2); background: rgba(255,100,100,0.06); color: rgba(255,150,150,0.8); }
+    .action-btn.danger:hover { background: rgba(255,100,100,0.15); }
+    .action-btn.success { border-color: rgba(163,240,192,0.2); background: rgba(163,240,192,0.06); color: #a3f0c0; }
+    .action-btn.success:hover { background: rgba(163,240,192,0.14); }
+    .action-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .toast {
+      position: fixed;
+      bottom: 28px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(8,8,16,0.92);
+      border: 1px solid rgba(255,179,207,0.2);
+      color: rgba(255,179,207,0.9);
+      font-family: 'Lora', serif;
+      font-style: italic;
+      font-size: 0.9rem;
+      padding: 12px 24px;
+      border-radius: 50px;
+      opacity: 0;
+      transition: all 0.35s ease;
+      pointer-events: none;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .loading-txt {
+      text-align: center;
+      font-style: italic;
+      color: rgba(255,255,255,0.3);
+      padding: 40px;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 600px) {
+      .panel-body { padding: 16px; }
+      .letters-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="loginScreen">
+    <p class="admin-login-title">portal admin 🌙</p>
+    <input type="password" id="adminKeyInput" class="admin-key-input" placeholder="admin key..." autocomplete="off"/>
+    <button class="admin-login-btn" id="adminLoginBtn">Enter</button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel">
+    <header class="panel-header">
+      <span class="panel-title">letter portal admin</span>
+      <a class="panel-logout" href="#" id="logoutBtn">logout</a>
+    </header>
+    <div class="panel-body">
+      <p class="section-title">all memories</p>
+      <div class="letters-grid" id="lettersGrid">
+        <p class="loading-txt">loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const WORKER_URL = 'https://letterboy-api.zeus-karthik11.workers.dev';
+    let adminKey = '';
+
+    const loginScreen  = document.getElementById('loginScreen');
+    const adminPanel   = document.getElementById('adminPanel');
+    const keyInput     = document.getElementById('adminKeyInput');
+    const loginBtn     = document.getElementById('adminLoginBtn');
+    const loginError   = document.getElementById('loginError');
+    const lettersGrid  = document.getElementById('lettersGrid');
+    const logoutBtn    = document.getElementById('logoutBtn');
+    const toast        = document.getElementById('toast');
+
+    // Check saved key
+    const savedKey = sessionStorage.getItem('adminKey');
+    if (savedKey) {
+      adminKey = savedKey;
+      showPanel();
+    }
+
+    loginBtn.addEventListener('click', tryLogin);
+    keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+    logoutBtn.addEventListener('click', e => {
+      e.preventDefault();
+      sessionStorage.removeItem('adminKey');
+      adminKey = '';
+      adminPanel.style.display = 'none';
+      loginScreen.style.display = 'flex';
+    });
+
+    async function tryLogin() {
+      const key = keyInput.value.trim();
+      if (!key) return;
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Checking...';
+
+      // Test the key by fetching admin list
+      try {
+        const res = await fetch(`${WORKER_URL}/admin/letters`, {
+          headers: { 'X-Admin-Key': key }
+        });
+        if (res.ok) {
+          adminKey = key;
+          sessionStorage.setItem('adminKey', key);
+          loginError.textContent = '';
+          showPanel();
+        } else {
+          loginError.textContent = 'wrong key 🌙';
+        }
+      } catch {
+        loginError.textContent = 'connection failed';
+      }
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Enter';
+    }
+
+    function showPanel() {
+      loginScreen.style.display = 'none';
+      adminPanel.style.display = 'block';
+      loadLetters();
+    }
+
+    async function loadLetters() {
+      lettersGrid.innerHTML = '<p class="loading-txt">loading memories...</p>';
+      try {
+        const res = await fetch(`${WORKER_URL}/admin/letters`, {
+          headers: { 'X-Admin-Key': adminKey }
+        });
+        if (!res.ok) throw new Error('auth');
+        const data = await res.json();
+        renderGrid(data.letters || []);
+      } catch (e) {
+        lettersGrid.innerHTML = '<p class="loading-txt">failed to load. try again.</p>';
+      }
+    }
+
+    function renderGrid(letters) {
+      if (letters.length === 0) {
+        lettersGrid.innerHTML = '<p class="loading-txt">no letters yet.</p>';
+        return;
+      }
+
+      lettersGrid.innerHTML = '';
+      letters.forEach(l => {
+        const card = document.createElement('div');
+        card.className = 'letter-card';
+        card.innerHTML = `
+          <div class="card-code">${l.code}</div>
+          <div class="card-name">${l.name}</div>
+          <span class="card-state state-${l.state || 'active'}">${l.state || 'active'}</span>
+          <div class="card-actions" id="actions-${l.code}"></div>
+        `;
+        lettersGrid.appendChild(card);
+
+        const actionsEl = document.getElementById(`actions-${l.code}`);
+        buildActions(actionsEl, l);
+      });
+    }
+
+    function buildActions(el, letter) {
+      const state = letter.state || 'active';
+
+      // Reopen button — show if faded or reopen_requested
+      if (state === 'faded' || state === 'reopen_requested') {
+        const btn = makeBtn('Reopen 🌙', 'success', () => adminAction(letter.code, 'reopen', btn));
+        el.appendChild(btn);
+      }
+
+      // Lock — show if not expired
+      if (state !== 'expired') {
+        const btn = makeBtn('Lock 🔒', 'danger', () => adminAction(letter.code, 'lock', btn));
+        el.appendChild(btn);
+      }
+
+      // Reset to active — always
+      const resetBtn = makeBtn('Reset ↺', '', () => adminAction(letter.code, 'reset', resetBtn));
+      el.appendChild(resetBtn);
+
+      // Fade
+      if (state === 'active' || state === 'reopened_once') {
+        const fadeBtn = makeBtn('Fade ✦', '', () => adminAction(letter.code, 'fade', fadeBtn));
+        el.appendChild(fadeBtn);
+      }
+    }
+
+    function makeBtn(label, cls, onClick) {
+      const btn = document.createElement('button');
+      btn.className = 'action-btn' + (cls ? ' ' + cls : '');
+      btn.textContent = label;
+      btn.addEventListener('click', onClick);
+      return btn;
+    }
+
+    async function adminAction(code, action, btn) {
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${WORKER_URL}/admin/update`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Key': adminKey
+          },
+          body: JSON.stringify({ code, action })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`${code}: ${action} done ✨`);
+          setTimeout(loadLetters, 800);
+        } else {
+          showToast('action failed 🥲');
+          btn.disabled = false;
+        }
+      } catch {
+        showToast('connection failed');
+        btn.disabled = false;
+      }
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 2800);
+    }
+  </script>
+</body>
+</html>

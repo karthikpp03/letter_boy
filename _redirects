@@ -1,0 +1,10 @@
+# Letter Portal — Netlify Redirects
+
+# /letter/728194 → index.html (code extracted by JS from URL)
+/letter/:code  /index.html  200
+
+# /admin → admin.html
+/admin         /admin.html  200
+
+# Catch-all fallback
+/*             /index.html  200
