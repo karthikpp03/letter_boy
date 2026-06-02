@@ -187,15 +187,25 @@ async function initLoginPage() {
       return;
     }
 
-    // Check local memory state
-    const localState = getLocalState(code);
-    const serverState = letters[code].state || 'active';
+    // Always fetch live state from Worker — never trust stale local cache for gating
+    // This ensures REOPEN:code from admin instantly unblocks the user
+    btn.classList.add('loading');
+    const liveState = await fetchLiveState(code);
+    const effectiveState = liveState || letters[code].state || 'active';
 
-    // Determine effective state (local cache is more up-to-date for faded)
-    const effectiveState = (localState && localState.state) ? localState.state : serverState;
+    // Sync local state to match server (clear stale faded if server says reopened_once)
+    const READABLE_STATES = ['active', 'reopened_once'];
+    if (READABLE_STATES.includes(effectiveState)) {
+      // Server says readable — clear any stale local faded state
+      const local = getLocalState(code) || {};
+      if (local.state && !READABLE_STATES.includes(local.state)) {
+        mergeLocalState(code, { state: effectiveState });
+      }
+    }
 
     // If expired (permanently locked after reopen read)
     if (effectiveState === 'expired') {
+      btn.classList.remove('loading');
       showError("this memory has faded forever 🌙");
       return;
     }
@@ -203,26 +213,26 @@ async function initLoginPage() {
     // If faded — show reopen screen instead of letter
     if (effectiveState === 'faded') {
       input.classList.add('glow-success');
-      btn.classList.add('loading');
       await sleep(300);
       triggerPortalTransition(() => {
         sessionStorage.setItem('letterCode', code);
         sessionStorage.setItem('portalOpen', '1');
         sessionStorage.setItem('memoryFaded', '1');
+        sessionStorage.setItem('liveLetterState', effectiveState);
         window.location.href = 'letter.html';
       });
       return;
     }
 
-    // If reopen_requested — still show faded (pending admin)
+    // If reopen_requested — still show faded screen (pending admin approval)
     if (effectiveState === 'reopen_requested') {
+      btn.classList.remove('loading');
       showError("reopen request pending... 🌙");
       return;
     }
 
     // Normal open flow (active or reopened_once)
     input.classList.add('glow-success');
-    btn.classList.add('loading');
     setFeedback('', 'success');
 
     await sleep(180);
@@ -237,6 +247,7 @@ async function initLoginPage() {
     triggerPortalTransition(() => {
       sessionStorage.setItem('letterCode', code);
       sessionStorage.setItem('portalOpen', '1');
+      sessionStorage.setItem('liveLetterState', effectiveState);
       sessionStorage.removeItem('memoryFaded');
       window.location.href = 'letter.html';
     });
@@ -260,15 +271,18 @@ async function initLoginPage() {
 async function initLetterPage() {
   const letters = await loadLetters();
 
-  const code       = sessionStorage.getItem('letterCode');
-  const portalOpen = sessionStorage.getItem('portalOpen');
-  const memoryFaded = sessionStorage.getItem('memoryFaded');
+  const code          = sessionStorage.getItem('letterCode');
+  const portalOpen    = sessionStorage.getItem('portalOpen');
+  const memoryFaded   = sessionStorage.getItem('memoryFaded');
+  // liveLetterState was set by the login page after fresh Worker fetch
+  const liveState     = sessionStorage.getItem('liveLetterState');
 
   // No valid portal entry
   if (!code || !letters[code] || !portalOpen) {
     sessionStorage.removeItem('letterCode');
     sessionStorage.removeItem('portalOpen');
     sessionStorage.removeItem('memoryFaded');
+    sessionStorage.removeItem('liveLetterState');
     showPortalCloseAndRedirect();
     return;
   }
@@ -279,17 +293,23 @@ async function initLetterPage() {
   // ── FADED / REOPEN SCREEN ──
   if (memoryFaded === '1') {
     sessionStorage.removeItem('memoryFaded');
-    showReopenScreen(code, letters[code]);
+    const data = letters[code];
+    // Use live state passed from login page, not stale localStorage
+    showReopenScreen(code, data, liveState || 'faded');
     return;
   }
 
   const data = letters[code];
-  const localState = getLocalState(code) || {};
-  const effectiveState = localState.state || data.state || 'active';
 
-  // If already faded and somehow landed here, show reopen
-  if (effectiveState === 'faded' || effectiveState === 'expired') {
-    showReopenScreen(code, data);
+  // Use live state (freshly fetched by login page) — fall back to json then local
+  const localState     = getLocalState(code) || {};
+  const READABLE_STATES = ['active', 'reopened_once'];
+  // liveState from session is authoritative; only fall back if absent
+  const effectiveState = liveState || localState.state || data.state || 'active';
+
+  // If not readable — show reopen screen
+  if (!READABLE_STATES.includes(effectiveState)) {
+    showReopenScreen(code, data, effectiveState);
     return;
   }
 
@@ -349,9 +369,13 @@ async function sendMessage(code, data, state) {
   sendBtn.disabled = true;
   statusText.textContent = '';
 
-  // Determine if this is a reopened read
-  const localState = getLocalState(code) || {};
-  const isReopen   = (localState.state === 'reopened_once') || (data.state === 'reopened_once');
+  // Determine if this is a reopened read — use live session state, not stale localStorage
+  const sessionState = sessionStorage.getItem('liveLetterState') || '';
+  const localState   = getLocalState(code) || {};
+  const isReopen     = sessionState === 'reopened_once'
+                    || localState.state === 'reopened_once'
+                    || data.state === 'reopened_once'
+                    || state === 'reopened_once';
   const nextState  = isReopen ? 'expired' : 'faded';
   const stateLabel = isReopen ? '🔒 Final Read' : '💌 New Reply';
 
@@ -446,55 +470,73 @@ function triggerMemoryFade(code, nextState) {
 
 /* ══════════════════════════════
    REOPEN SCREEN
-   Shown when faded memory is accessed again.
-   Keeps existing emotional style, adds reopen CTA.
+   Shown when a faded memory is accessed again.
+   Renders as a full dark overlay — not inside .paper
+   (paper has cream bg + dark ink which hides text).
 ══════════════════════════════ */
 
-function showReopenScreen(code, data) {
-  const letterPage = document.querySelector('.letter-page');
+function showReopenScreen(code, data, explicitState) {
+  // Hide paper and letter page — reopen screen is its own world
   const paper      = document.getElementById('paper');
+  const letterPage = document.querySelector('.letter-page');
+  if (paper)      paper.style.display = 'none';
+  if (letterPage) letterPage.style.opacity = '0';
 
-  if (paper) {
-    // Clear existing content
-    paper.innerHTML = '';
+  // State priority: explicit (from live Worker fetch) > local cache > data field
+  const localState = getLocalState(code) || {};
+  const state      = explicitState || localState.state || data.state || 'faded';
+  const isExpired  = state === 'expired';
+  const isPending  = state === 'reopen_requested';
 
-    const localState = getLocalState(code) || {};
-    const state = localState.state || data.state || 'faded';
-    const isExpired = state === 'expired';
-    const isPending = state === 'reopen_requested';
+  // Build full-screen overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'reopenOverlay';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:1000',
+    'display:flex', 'align-items:center', 'justify-content:center',
+    'padding:24px', 'opacity:0', 'transition:opacity 0.6s ease'
+  ].join(';');
 
-    // Build the reopen card inside the existing paper
-    paper.classList.add('paper-light');
-    paper.innerHTML = `
-      <div class="paper-light"></div>
-      <div class="reopen-screen">
-        <div class="reopen-icon">${isExpired ? '🔒' : isPending ? '🌙' : '🌫️'}</div>
-        <h1 class="reopen-title">
-          ${isExpired
-            ? 'This memory has faded forever'
-            : isPending
-            ? 'Reopen request sent...'
-            : 'This memory has faded'}
-        </h1>
-        <p class="reopen-sub">
-          ${isExpired
-            ? 'Some memories are meant to be carried, not revisited.'
-            : isPending
-            ? 'Waiting for a quiet moment to reopen 🌙'
-            : 'You already read this once and left something behind.\nThe memory has been carried away.'}
-        </p>
-        ${(!isExpired && !isPending) ? `
-          <button class="reopen-btn" id="reopenBtn">Request Reopen 🌙</button>
-          <p class="reopen-status" id="reopenStatus"></p>
-        ` : ''}
-        <a href="index.html" class="reopen-back">← back to portal</a>
-      </div>
-    `;
+  const card = document.createElement('div');
+  card.className = 'reopen-card';
 
-    if (!isExpired && !isPending) {
-      const reopenBtn    = document.getElementById('reopenBtn');
-      const reopenStatus = document.getElementById('reopenStatus');
-      reopenBtn.addEventListener('click', () => sendReopenRequest(code, data, reopenBtn, reopenStatus));
+  // Build inner HTML
+  let inner = `<div class="reopen-icon">${isExpired ? '🔒' : isPending ? '🌙' : '🌫️'}</div>`;
+  inner += `<h1 class="reopen-title">${
+    isExpired ? 'This memory has faded forever'
+    : isPending ? 'Reopen request sent...'
+    : 'This memory has faded'
+  }</h1>`;
+  inner += `<p class="reopen-sub">${
+    isExpired
+      ? 'Some memories are meant to be carried, not revisited.'
+      : isPending
+      ? 'Waiting for a quiet moment to reopen 🌙'
+      : 'You already read this once and left something behind.<br>The memory has been carried away.'
+  }</p>`;
+  if (!isExpired && !isPending) {
+    inner += `<button class="reopen-btn" id="reopenBtn">Request Reopen 🌙</button>`;
+    inner += `<p class="reopen-status" id="reopenStatus"></p>`;
+  }
+  inner += `<a href="index.html" class="reopen-back">← back to portal</a>`;
+  card.innerHTML = inner;
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  // Fade in after paint
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+  });
+
+  // Attach button listener AFTER element is in DOM
+  if (!isExpired && !isPending) {
+    const reopenBtn    = document.getElementById('reopenBtn');
+    const reopenStatus = document.getElementById('reopenStatus');
+    if (reopenBtn) {
+      reopenBtn.addEventListener('click', () => {
+        sendReopenRequest(code, data, reopenBtn, reopenStatus);
+      });
     }
   }
 }
@@ -690,6 +732,27 @@ function initGentleProtection() {
       setTimeout(() => whisper.remove(), 500);
     }, 2200);
   });
+}
+
+
+/* ══════════════════════════════
+   LIVE STATE FETCH
+   Always hits Worker for fresh state — bypasses all caches.
+   Falls back to null on any error (caller uses json state).
+══════════════════════════════ */
+
+async function fetchLiveState(code) {
+  try {
+    const res = await fetch(
+      `${WORKER_URL}/status/${code}?t=${Date.now()}`,
+      { cache: 'no-store' }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.state || null;
+  } catch {
+    return null;
+  }
 }
 
 

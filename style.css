@@ -1036,19 +1036,30 @@ textarea::placeholder {
 
 
 /* ══════════════════════════════
-   REOPEN SCREEN
-   Shown when a faded memory is accessed again.
+   REOPEN OVERLAY
+   Full-screen dark overlay — independent of .paper.
+   Text is white/light on the dark portal background.
 ══════════════════════════════ */
 
-.reopen-screen {
+#reopenOverlay {
+  background: transparent; /* stars canvas shows through */
+}
+
+.reopen-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   text-align: center;
-  padding: 40px 24px;
   gap: 18px;
-  min-height: 340px;
+  max-width: 420px;
+  width: 100%;
+  padding: 48px 32px;
+  background: rgba(12, 12, 24, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,179,207,0.12);
+  border-radius: 24px;
+  box-shadow: 0 0 80px rgba(255,179,207,0.04), 0 24px 48px rgba(0,0,0,0.4);
 }
 
 .reopen-icon {
@@ -1065,7 +1076,7 @@ textarea::placeholder {
   font-family: 'Playfair Display', serif;
   font-style: italic;
   font-size: clamp(1.2rem, 3vw, 1.6rem);
-  color: var(--ink);
+  color: rgba(255, 255, 255, 0.88);
   font-weight: 400;
   line-height: 1.4;
   max-width: 360px;
@@ -1074,9 +1085,8 @@ textarea::placeholder {
 .reopen-sub {
   font-family: 'Lora', serif;
   font-size: clamp(0.85rem, 2vw, 0.95rem);
-  color: var(--ink3);
+  color: rgba(255, 255, 255, 0.5);
   line-height: 1.75;
-  white-space: pre-line;
   max-width: 320px;
 }
 
@@ -1115,7 +1125,7 @@ textarea::placeholder {
   font-family: 'Lora', serif;
   font-style: italic;
   font-size: 0.85rem;
-  color: var(--ink3);
+  color: rgba(255, 255, 255, 0.4);
   min-height: 20px;
 }
 
@@ -1123,14 +1133,13 @@ textarea::placeholder {
   margin-top: 4px;
   font-family: 'Lora', serif;
   font-size: 0.82rem;
-  color: var(--ink3);
+  color: rgba(255, 255, 255, 0.3);
   text-decoration: none;
-  opacity: 0.65;
-  transition: opacity 0.25s ease;
+  transition: color 0.25s ease;
   letter-spacing: 0.02em;
 }
 
-.reopen-back:hover { opacity: 1; }
+.reopen-back:hover { color: rgba(255, 255, 255, 0.65); }
 
 @keyframes reopenGlow {
   0%,100% { box-shadow: 0 0 0 rgba(255,179,207,0); }
@@ -1163,6 +1172,6 @@ textarea::placeholder {
 ══════════════════════════════ */
 
 @media (max-width: 600px) {
-  .reopen-screen { padding: 28px 16px; min-height: 280px; }
-  .reopen-title  { font-size: 1.15rem; }
+  .reopen-card  { padding: 32px 20px; min-height: auto; }
+  .reopen-title { font-size: 1.15rem; }
 }
