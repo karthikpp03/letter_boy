@@ -404,7 +404,12 @@ async function fetchLettersSHAAndJSON(env) {
 
 async function commitLettersJSON(letters, sha, message, env) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${env.GITHUB_FILE_PATH}`;
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(letters, null, 2))));
+  const encoded = btoa(
+  Array.from(
+    new TextEncoder().encode(JSON.stringify(letters, null, 2)),
+    byte => String.fromCharCode(byte)
+  ).join('')
+);
 
   try {
     const res = await fetch(url, {
