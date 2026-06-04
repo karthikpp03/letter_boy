@@ -404,12 +404,13 @@ async function fetchLettersSHAAndJSON(env) {
 
 async function commitLettersJSON(letters, sha, message, env) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${env.GITHUB_FILE_PATH}`;
-  const encoded = btoa(
-  Array.from(
-    new TextEncoder().encode(JSON.stringify(letters, null, 2)),
-    byte => String.fromCharCode(byte)
-  ).join('')
-);
+
+  // ── Unicode-safe UTF-8 → Base64 encoding ──
+  // TextEncoder produces proper UTF-8 bytes for all Unicode (emojis, Tamil, Japanese, etc.)
+  // Then we base64-encode the raw bytes — no encodeURIComponent / unescape / escape
+  const jsonString = JSON.stringify(letters, null, 2);
+  const utf8Bytes  = new TextEncoder().encode(jsonString);
+  const encoded    = btoa(String.fromCharCode(...utf8Bytes));
 
   try {
     const res = await fetch(url, {
