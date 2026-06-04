@@ -1,19 +1,16 @@
-
 {
   "12345": {
-    "name": "Emoji Test ✨",
+    "name": "Emoji Test â¨",
     "theme": "moonlight",
-    "state": "active",
+    "state": "faded",
     "reopen_count": 0,
-    "letter": "Hello 😭\n\nThis is a Unicode test letter.\n\nMoon 🌙\nStars ✨\n\nTamil test:\nதமிழ்\n\nIf you can read all of this correctly, the encoding bug is fixed 🎉"
+    "letter": "Hello ð­\n\nThis is a Unicode test letter.\n\nMoon ð\nStars â¨\n\nTamil test:\nà®¤à®®à®¿à®´à¯\n\nIf you can read all of this correctly, the encoding bug is fixed ð"
   },
-
   "67890": {
-    "name": "Favorite Human 🌙",
+    "name": "Favorite Human ð",
     "theme": "default",
     "state": "active",
     "reopen_count": 0,
-    "letter": "You know what's funny?\n\nI never planned for you to become important.\n\nBut somehow...\n\nhere we are 😭\n\nThank you for staying through the weird days.\n\nAnd please stop overthinking everything.\n\nThis is an official warning ✨"
+    "letter": "You know what's funny?\n\nI never planned for you to become important.\n\nBut somehow...\n\nhere we are ð­\n\nThank you for staying through the weird days.\n\nAnd please stop overthinking everything.\n\nThis is an official warning â¨"
   }
 }
-
