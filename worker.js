@@ -374,7 +374,10 @@ async function fetchLettersJSON(env) {
     });
     if (!res.ok) throw new Error(`GitHub API ${res.status}`);
     const data = await res.json();
-    const content = atob(data.content.replace(/\n/g, ''));
+    // ── Unicode-safe UTF-8 decode ──
+    const binary = atob(data.content.replace(/\n/g, ''));
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const content = new TextDecoder().decode(bytes);
     return JSON.parse(content);
   } catch (e) {
     console.error('fetchLettersJSON error:', e);
@@ -394,7 +397,10 @@ async function fetchLettersSHAAndJSON(env) {
     });
     if (!res.ok) throw new Error(`GitHub API ${res.status}`);
     const data = await res.json();
-    const content = atob(data.content.replace(/\n/g, ''));
+    // ── Unicode-safe UTF-8 decode ──
+    const binary = atob(data.content.replace(/\n/g, ''));
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const content = new TextDecoder().decode(bytes);
     return { sha: data.sha, letters: JSON.parse(content) };
   } catch (e) {
     console.error('fetchLettersSHAAndJSON error:', e);
