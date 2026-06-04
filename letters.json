@@ -1,16 +1,23 @@
 {
   "12345": {
-    "name": "Emoji Test ÃÂ¢ÃÂÃÂ¨",
+    "name": "Emoji Test ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¨",
     "theme": "moonlight",
     "state": "reopened_once",
     "reopen_count": 1,
-    "letter": "Hello ÃÂ°ÃÂÃÂÃÂ­\n\nThis is a Unicode test letter.\n\nMoon ÃÂ°ÃÂÃÂÃÂ\nStars ÃÂ¢ÃÂÃÂ¨\n\nTamil test:\nÃÂ ÃÂ®ÃÂ¤ÃÂ ÃÂ®ÃÂ®ÃÂ ÃÂ®ÃÂ¿ÃÂ ÃÂ®ÃÂ´ÃÂ ÃÂ¯ÃÂ\n\nIf you can read all of this correctly, the encoding bug is fixed ÃÂ°ÃÂÃÂÃÂ"
+    "letter": "Hello ÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂ­\n\nThis is a Unicode test letter.\n\nMoon ÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂ\nStars ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¨\n\nTamil test:\nÃÂÃÂ ÃÂÃÂ®ÃÂÃÂ¤ÃÂÃÂ ÃÂÃÂ®ÃÂÃÂ®ÃÂÃÂ ÃÂÃÂ®ÃÂÃÂ¿ÃÂÃÂ ÃÂÃÂ®ÃÂÃÂ´ÃÂÃÂ ÃÂÃÂ¯ÃÂÃÂ\n\nIf you can read all of this correctly, the encoding bug is fixed ÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂ"
   },
   "67890": {
-    "name": "Favorite Human ÃÂ°ÃÂÃÂÃÂ",
+    "name": "Favorite Human ÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂ",
     "theme": "default",
     "state": "active",
     "reopen_count": 0,
-    "letter": "You know what's funny?\n\nI never planned for you to become important.\n\nBut somehow...\n\nhere we are ÃÂ°ÃÂÃÂÃÂ­\n\nThank you for staying through the weird days.\n\nAnd please stop overthinking everything.\n\nThis is an official warning ÃÂ¢ÃÂÃÂ¨"
+    "letter": "You know what's funny?\n\nI never planned for you to become important.\n\nBut somehow...\n\nhere we are ÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂ­\n\nThank you for staying through the weird days.\n\nAnd please stop overthinking everything.\n\nThis is an official warning ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¨"
+  },
+  "123456": {
+    "name": "Test",
+    "theme": "moonlight",
+    "state": "active",
+    "reopen_count": 0,
+    "letter": "Hello test works"
   }
 }
