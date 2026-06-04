@@ -1,4 +1,11 @@
 {
+  "123": {
+    "name": "Test",
+    "theme": "moonlight",
+    "state": "active",
+    "reopen_count": 0,
+    "letter": "Hello test works\nMacha mass da 😂🌚🫪\nMajbgy🩴🤗📈"
+  },
   "12345": {
     "name": "Favorite Human ✨",
     "theme": "moonlight",
