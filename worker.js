@@ -6,6 +6,7 @@
  *   POST /webhook          — Telegram webhook receiver
  *   POST /comment          — Comment + state update from frontend
  *   POST /reopen-request   — Reopen request from frontend
+ *   POST /opened           — Letter opened notification (fires on every valid code entry)
  *   GET  /status/:code     — Letter state query
  *   GET  /admin/letters    — All letters (admin panel)
  *   POST /admin/update     — Admin action (reopen/lock/etc)
@@ -56,6 +57,11 @@ export default {
       // ── Frontend: reopen request ──
       if (path === '/reopen-request' && request.method === 'POST') {
         return await handleReopenRequest(request, env, corsHeaders);
+      }
+
+      // ── Frontend: letter opened notification ──
+      if (path === '/opened' && request.method === 'POST') {
+        return await handleLetterOpened(request, env, corsHeaders);
       }
 
       // ── Status check ──
@@ -273,6 +279,31 @@ ${message}`;
   if (validStates.includes(nextState)) {
     await updateLetterState(code, nextState, env);
   }
+
+  return json({ ok: true }, 200, cors);
+}
+
+
+/* ══════════════════════════════
+   LETTER OPENED NOTIFICATION
+   Called by frontend on every successful code entry + letter render.
+══════════════════════════════ */
+
+async function handleLetterOpened(request, env, cors) {
+  const { code, name } = await request.json();
+
+  if (!code) return json({ error: 'missing code' }, 400, cors);
+
+  const tgMsg =
+`📬 Letter Opened
+━━━━━━━━━━━━━━━━━━
+🔐 Code: ${code}
+👤 Recipient: ${name || 'Unknown'}
+🕒 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(',', ' •')}
+━━━━━━━━━━━━━━━━━━
+Someone has opened this letter 🤍`;
+
+  await sendTelegram(env, tgMsg);
 
   return json({ ok: true }, 200, cors);
 }
