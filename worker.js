@@ -146,43 +146,98 @@ async function handleWebhook(request, env, cors) {
 ══════════════════════════════ */
 
 async function parseAndExecuteCommand(text, env) {
-  // ── SINGLE-LINE COMMANDS ──
-  const reopenMatch = text.match(/^REOPEN:(\d+)\s*$/i);
-  if (reopenMatch) {
-    const code = reopenMatch[1];
-    const ok = await updateLetterState(code, 'reopened_once', env);
-    return {
-      reply: ok
-        ? `✅ REOPEN approved for ${code}. They get one more read.`
-        : `❌ Failed to update ${code}. Check GitHub token/repo.`
-    };
-  }
+  // Normalise: strip invisible chars and trim
+  const t = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
-  const lockMatch = text.match(/^LOCK:(\d+)\s*$/i);
-  if (lockMatch) {
-    const code = lockMatch[1];
-    const ok = await updateLetterState(code, 'expired', env);
-    return {
-      reply: ok
-        ? `🔒 LOCKED ${code} permanently.`
-        : `❌ Failed to lock ${code}.`
-    };
-  }
-
-  const statusMatch = text.match(/^STATUS:(\d+)\s*$/i);
+  // ── STATUS:code ──
+  const statusMatch = t.match(/^STATUS:(\S+)$/i);
   if (statusMatch) {
     const code = statusMatch[1];
     const letters = await fetchLettersJSON(env);
-    const letter  = letters?.[code];
-    if (!letter) return { reply: `❓ Code ${code} not found.` };
+    if (!letters) return { reply: '\u274c GitHub update failed.' };
+    const letter = letters[code];
+    if (!letter) return { reply: '\u274c Code not found.' };
     return {
-      reply: `📊 ${code} — ${letter.name}\nState: ${letter.state || 'active'}\nReopens: ${letter.reopen_count || 0}`
+      reply: [
+        '\u{1F4CA} Letter Status',
+        '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
+        `\u{1F510} Code: ${code}`,
+        `\u{1F464} Name: ${letter.name}`,
+        `\u{1F4C4} State: ${letter.state || 'active'}`,
+        `\u{1F501} Reopens Used: ${letter.reopen_count || 0}`,
+        '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501'
+      ].join('\n')
     };
   }
 
+  // ── REOPEN:code ──
+  const reopenMatch = t.match(/^REOPEN:(\S+)$/i);
+  if (reopenMatch) {
+    const code = reopenMatch[1];
+    const result = await fetchLettersSHAAndJSON(env);
+    if (!result) return { reply: '\u274c GitHub update failed.' };
+    const { sha, letters } = result;
+    if (!letters[code]) return { reply: '\u274c Code not found.' };
+    letters[code].state = 'reopened_once';
+    letters[code].reopen_count = (letters[code].reopen_count || 0) + 1;
+    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: state \u2192 reopened_once`, env);
+    return { reply: ok ? '\u2705 Letter reopened successfully.' : '\u274c GitHub update failed.' };
+  }
+
+  // ── LOCK:code ──
+  const lockMatch = t.match(/^LOCK:(\S+)$/i);
+  if (lockMatch) {
+    const code = lockMatch[1];
+    const result = await fetchLettersSHAAndJSON(env);
+    if (!result) return { reply: '\u274c GitHub update failed.' };
+    const { sha, letters } = result;
+    if (!letters[code]) return { reply: '\u274c Code not found.' };
+    letters[code].state = 'expired';
+    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: state \u2192 expired`, env);
+    return { reply: ok ? '\u{1F512} Letter locked permanently.' : '\u274c GitHub update failed.' };
+  }
+
+  // ── RESET:code ──
+  const resetMatch = t.match(/^RESET:(\S+)$/i);
+  if (resetMatch) {
+    const code = resetMatch[1];
+    const result = await fetchLettersSHAAndJSON(env);
+    if (!result) return { reply: '\u274c GitHub update failed.' };
+    const { sha, letters } = result;
+    if (!letters[code]) return { reply: '\u274c Code not found.' };
+    letters[code].state = 'active';
+    letters[code].reopen_count = 0;
+    delete letters[code].faded;
+    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: reset \u2192 active`, env);
+    return { reply: ok ? '\u2705 Letter reset successfully.' : '\u274c GitHub update failed.' };
+  }
+
+  // ── DELETE:code ──
+  const deleteMatch = t.match(/^DELETE:(\S+)$/i);
+  if (deleteMatch) {
+    const code = deleteMatch[1];
+    const result = await fetchLettersSHAAndJSON(env);
+    if (!result) return { reply: '\u274c GitHub update failed.' };
+    const { sha, letters } = result;
+    if (!letters[code]) return { reply: '\u274c Code not found.' };
+    delete letters[code];
+    const ok = await commitLettersJSON(letters, sha, `[bot] DELETE ${code}`, env);
+    return { reply: ok ? '\u{1F5D1} Letter deleted successfully.' : '\u274c GitHub update failed.' };
+  }
+
+  // ── LIST ──
+  if (/^LIST$/i.test(t)) {
+    const letters = await fetchLettersJSON(env);
+    if (!letters) return { reply: '\u274c GitHub update failed.' };
+    const entries = Object.entries(letters);
+    if (entries.length === 0) return { reply: '\u{1F4DA} No letters found.' };
+    const lines = entries.map(([code, l]) => `${code} \u2014 ${l.name} (${l.state || 'active'})`);
+    return { reply: '\u{1F4DA} Letters\n' + lines.join('\n') };
+  }
+
   // ── CREATE LETTER (multiline block) ──
-  if (/^CREATE\s+LETTER/i.test(text)) {
-    return await parseCreateLetter(text, env);
+  if (/^CREATE\s+LETTER/i.test(t)) {
+    return await parseCreateLetter(t, env);
   }
 
   return { reply: null };
@@ -521,7 +576,7 @@ async function sendTelegram(env, text) {
         body: JSON.stringify({
           chat_id: env.TELEGRAM_CHAT_ID,
           text,
-          parse_mode: 'HTML'
+
         })
       }
     );
