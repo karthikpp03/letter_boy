@@ -23,7 +23,7 @@
   "test1234": {
     "name": "test🤍",
     "theme": "moonlight",
-    "state": "reopened_once",
+    "state": "expired",
     "reopen_count": 1,
     "letter": "testtt"
   }
