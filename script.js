@@ -246,14 +246,11 @@ async function initLoginPage() {
 
     // Fire-and-forget BEFORE transition — page navigates away inside the
     // callback, so any fetch started after that point gets killed.
-    console.log('[opened] Sending notification for code:', code, 'name:', letters[code].name);
     fetch(`${WORKER_URL}/opened`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, name: letters[code].name })
-    })
-    .then(res => console.log('[opened] Response status:', res.status))
-    .catch(err => console.error('[opened] Fetch error:', err));
+    }).catch(() => {});
 
     triggerPortalTransition(() => {
       sessionStorage.setItem('letterCode', code);
