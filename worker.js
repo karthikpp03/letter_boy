@@ -292,6 +292,8 @@ ${message}`;
 async function handleLetterOpened(request, env, cors) {
   const { code, name } = await request.json();
 
+  console.log('[opened] Handler called. code:', code, 'name:', name);
+
   if (!code) return json({ error: 'missing code' }, 400, cors);
 
   const tgMsg =
@@ -303,7 +305,9 @@ async function handleLetterOpened(request, env, cors) {
 ━━━━━━━━━━━━━━━━━━
 Someone has opened this letter 🤍`;
 
+  console.log('[opened] Sending Telegram message...');
   await sendTelegram(env, tgMsg);
+  console.log('[opened] Telegram sent.');
 
   return json({ ok: true }, 200, cors);
 }
