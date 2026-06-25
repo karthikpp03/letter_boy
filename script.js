@@ -244,19 +244,19 @@ async function initLoginPage() {
     burstParticles();
     await sleep(500);
 
+    // Fire-and-forget BEFORE transition — page navigates away inside the
+    // callback, so any fetch started after that point gets killed.
+    fetch(`${WORKER_URL}/opened`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name: letters[code].name })
+    }).catch(() => {});
+
     triggerPortalTransition(() => {
       sessionStorage.setItem('letterCode', code);
       sessionStorage.setItem('portalOpen', '1');
       sessionStorage.setItem('liveLetterState', effectiveState);
       sessionStorage.removeItem('memoryFaded');
-
-      // Fire-and-forget: notify that letter has been successfully opened
-      fetch(`${WORKER_URL}/opened`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, name: letters[code].name })
-      }).catch(() => {});
-
       window.location.href = 'letter.html';
     });
   }
