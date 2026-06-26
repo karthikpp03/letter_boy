@@ -131,6 +131,56 @@ function burstParticles() {
   }
 }
 
+/* Purely decorative — particles swirl inward toward the envelope
+   as the success transition plays. Does not affect any state. */
+function swirlParticlesInward() {
+  const wrap = document.getElementById('particlesWrap');
+  if (!wrap) return;
+  const anchorX = window.innerWidth / 2;
+  const anchorY = window.innerHeight * 0.36;
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle swirl-in';
+    const size = Math.random() * 3 + 1.5;
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 90 + Math.random() * 160;
+    const sx = Math.cos(angle) * radius;
+    const sy = Math.sin(angle) * radius;
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${anchorX}px;
+      top:${anchorY}px;
+      --sx:${sx}px;
+      --sy:${sy}px;
+      animation-delay:${Math.random() * 0.25}s;
+      opacity:0;
+      background:${Math.random() > 0.5 ? 'var(--pink)' : 'var(--gold)'};
+    `;
+    wrap.appendChild(p);
+    setTimeout(() => p.remove(), 1900);
+  }
+}
+
+/* Purely decorative — gentle cursor-based parallax on background
+   layers. No interaction with letter/portal state. */
+function initParallax() {
+  if (!window.matchMedia('(pointer: fine)').matches) return;
+  const glow = document.getElementById('ambientGlow');
+  const particles = document.getElementById('particlesWrap');
+  if (!glow && !particles) return;
+  let raf = null;
+  window.addEventListener('mousemove', (e) => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      const x = (e.clientX / window.innerWidth) - 0.5;
+      const y = (e.clientY / window.innerHeight) - 0.5;
+      if (glow) glow.style.transform = `translate3d(${x * -16}px, ${y * -12}px, 0)`;
+      if (particles) particles.style.transform = `translate3d(${x * 10}px, ${y * 8}px, 0)`;
+      raf = null;
+    });
+  }, { passive: true });
+}
+
 
 /* ══════════════════════════════
    LOGIN PAGE
@@ -176,7 +226,7 @@ async function initLoginPage() {
 
   function triggerPortalTransition(callback) {
     overlay.classList.add('active');
-    setTimeout(callback, 950);
+    setTimeout(callback, 1150);
   }
 
   async function openLetter() {
@@ -203,15 +253,18 @@ async function initLoginPage() {
       }
     }
 
-    // If expired (permanently locked after reopen read)
+    // Legacy safety net — older letters may still carry 'expired' from
+    // before unlimited reopens existed. New data never produces this state.
     if (effectiveState === 'expired') {
       btn.classList.remove('loading');
       showError("this memory has faded forever 🌙");
       return;
     }
 
-    // If faded — show reopen screen instead of letter
-    if (effectiveState === 'faded') {
+    // If faded OR locked — show the existing Reopen Request screen.
+    // Locked is a soft, reversible block (not a destructive one) —
+    // the admin can always bring it back with REOPEN:code.
+    if (effectiveState === 'faded' || effectiveState === 'locked') {
       input.classList.add('glow-success');
       await sleep(300);
       triggerPortalTransition(() => {
@@ -240,9 +293,16 @@ async function initLoginPage() {
     await sleep(250);
     envelope.classList.add('open');
 
+    // Tiny paper rises (CSS transition on the envelope-letter-slip) —
+    // give it a beat before the background brightens.
+    await sleep(350);
     if (ambientGlow) ambientGlow.classList.add('intensify');
+    await sleep(150);
+
+    // Particles swirl inward toward the envelope, then settle.
+    swirlParticlesInward();
     burstParticles();
-    await sleep(500);
+    await sleep(550);
 
     // Fire-and-forget BEFORE transition — page navigates away inside the
     // callback, so any fetch started after that point gets killed.
@@ -479,8 +539,8 @@ function triggerMemoryFade(code, nextState) {
 /* ══════════════════════════════
    REOPEN SCREEN
    Shown when a faded memory is accessed again.
-   Renders as a full dark overlay — not inside .paper
-   (paper has cream bg + dark ink which hides text).
+   Renders as a small warm paper card — its own quiet world,
+   separate from the main letter paper.
 ══════════════════════════════ */
 
 function showReopenScreen(code, data, explicitState) {
@@ -508,24 +568,37 @@ function showReopenScreen(code, data, explicitState) {
   const card = document.createElement('div');
   card.className = 'reopen-card';
 
-  // Build inner HTML
-  let inner = `<div class="reopen-icon">${isExpired ? '🔒' : isPending ? '🌙' : '🌫️'}</div>`;
-  inner += `<h1 class="reopen-title">${
-    isExpired ? 'This memory has faded forever'
-    : isPending ? 'Reopen request sent...'
-    : 'This memory has faded'
-  }</h1>`;
-  inner += `<p class="reopen-sub">${
-    isExpired
-      ? 'Some memories are meant to be carried, not revisited.'
-      : isPending
-      ? 'Waiting for a quiet moment to reopen 🌙'
-      : 'You already read this once and left something behind.<br>The memory has been carried away.'
-  }</p>`;
+  const title = isExpired
+    ? '🔒 This Memory Has Faded Forever'
+    : isPending
+    ? '🌙 Request Sent Successfully'
+    : '🤍 This Memory Has Been Safely Archived';
+
+  const sub = isExpired
+    ? 'Some memories are meant to be carried, not revisited.'
+    : isPending
+    ? `I won't be able to notify you when it's approved.<br>Please check back from time to time. 🤍`
+    : `You've already experienced this memory once.<br><br>
+       If you'd like to revisit it, you can send a gentle request.<br>
+       I'll review it and reopen it if approved. 🌙`;
+
+  // Build inner HTML — small old-paper card with a tiny envelope illustration
+  let inner = `<div class="reopen-envelope"></div>`;
+  inner += `<div class="reopen-content" id="reopenContent">`;
+  inner +=   `<h1 class="reopen-title">${title}</h1>`;
+  inner +=   `<p class="reopen-sub">${sub}</p>`;
   if (!isExpired && !isPending) {
-    inner += `<button class="reopen-btn" id="reopenBtn">Request Reopen 🌙</button>`;
+    inner += `<button class="reopen-btn" id="reopenBtn">
+                 <span class="reopen-btn-text">💌 Request to Read Again</span>
+                 <span class="reopen-btn-spinner" aria-hidden="true">
+                   <span class="spinner-dot-paper"></span>
+                   <span class="spinner-dot-paper"></span>
+                   <span class="spinner-dot-paper"></span>
+                 </span>
+               </button>`;
     inner += `<p class="reopen-status" id="reopenStatus"></p>`;
   }
+  inner += `</div>`;
   inner += `<a href="index.html" class="reopen-back">← back to portal</a>`;
   card.innerHTML = inner;
 
@@ -552,7 +625,8 @@ function showReopenScreen(code, data, explicitState) {
 
 async function sendReopenRequest(code, data, btn, statusEl) {
   btn.disabled = true;
-  btn.textContent = 'Sending request... 🌙';
+  btn.classList.add('loading');
+  if (statusEl) statusEl.textContent = '';
 
   const message =
 `🌙 Reopen Request
@@ -599,16 +673,23 @@ Reply with: REOPEN:${code}`;
 
   if (sent) {
     mergeLocalState(code, { state: 'reopen_requested', requestedAt: Date.now() });
-    btn.textContent = 'Request sent 🌙';
-    btn.classList.add('sent');
-    statusEl.textContent = 'Someone will read this and decide quietly.';
 
-    // Gentle shimmer animation on success
-    btn.style.animation = 'reopenGlow 1.8s ease infinite';
+    // Gently swap the card's content to the success message
+    const contentEl = document.getElementById('reopenContent');
+    if (contentEl) {
+      contentEl.classList.add('swap-out');
+      setTimeout(() => {
+        contentEl.innerHTML = `
+          <h1 class="reopen-title">🌙 Request Sent Successfully</h1>
+          <p class="reopen-sub">I won't be able to notify you when it's approved.<br>Please check back from time to time. 🤍</p>
+        `;
+        contentEl.classList.remove('swap-out');
+      }, 380);
+    }
   } else {
     btn.disabled = false;
-    btn.textContent = 'Request Reopen 🌙';
-    statusEl.textContent = 'Something went wrong. Try again 🥲';
+    btn.classList.remove('loading');
+    if (statusEl) statusEl.textContent = 'Something went wrong. Try again 🥲';
   }
 }
 
@@ -671,6 +752,7 @@ function showMascot(recipientName, onComplete) {
 
   deliveryTxt.textContent = 'Message safely delivered ✨';
   scene.classList.remove('hidden');
+  scene.classList.remove('fading');
 
   ['mascotChar', 'mascotLetter'].forEach(id => {
     const el = document.getElementById(id);
@@ -679,9 +761,27 @@ function showMascot(recipientName, onComplete) {
     el.parentNode.replaceChild(clone, el);
   });
 
+  // Tiny floating sparkles trailing the letter — purely decorative
+  for (let i = 0; i < 6; i++) {
+    const sparkle = document.createElement('div');
+    sparkle.className = 'mascot-sparkle';
+    sparkle.textContent = ['✦', '✧', '⋆'][i % 3];
+    sparkle.style.cssText = `
+      bottom: calc(22% + ${30 + Math.random() * 30}px);
+      left: ${10 + Math.random() * 70}%;
+      animation-delay: ${1 + i * 0.5}s;
+    `;
+    scene.appendChild(sparkle);
+    setTimeout(() => sparkle.remove(), 7800);
+  }
+
   setTimeout(() => {
-    scene.classList.add('hidden');
-    if (onComplete) onComplete();
+    scene.classList.add('fading');
+    setTimeout(() => {
+      scene.classList.add('hidden');
+      scene.classList.remove('fading');
+      if (onComplete) onComplete();
+    }, 650);
   }, 7800);
 }
 
@@ -786,6 +886,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initStars();
   initParticles();
   initGentleProtection();
+  initParallax();
 
   const page = getPage();
 
