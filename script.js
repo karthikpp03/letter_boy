@@ -243,8 +243,8 @@ async function initLoginPage() {
     const liveState = await fetchLiveState(code);
     const effectiveState = liveState || letters[code].state || 'active';
 
-    // Sync local state to match server (clear stale faded if server says reopened_once)
-    const READABLE_STATES = ['active', 'reopened_once'];
+    // Sync local state to match server (clear stale faded if server says active)
+    const READABLE_STATES = ['active'];
     if (READABLE_STATES.includes(effectiveState)) {
       // Server says readable — clear any stale local faded state
       const local = getLocalState(code) || {};
@@ -253,17 +253,9 @@ async function initLoginPage() {
       }
     }
 
-    // Legacy safety net — older letters may still carry 'expired' from
-    // before unlimited reopens existed. New data never produces this state.
-    if (effectiveState === 'expired') {
-      btn.classList.remove('loading');
-      showError("this memory has faded forever 🌙");
-      return;
-    }
-
-    // If faded OR locked — show the existing Reopen Request screen.
-    // Locked is a soft, reversible block (not a destructive one) —
-    // the admin can always bring it back with REOPEN:code.
+    // faded, locked, reopen_requested, or any non-active/non-readable state
+    // → show the existing Reopen Request screen.
+    // locked is soft and reversible — admin can always REOPEN:code to unlock.
     if (effectiveState === 'faded' || effectiveState === 'locked') {
       input.classList.add('glow-success');
       await sleep(300);
@@ -306,10 +298,20 @@ async function initLoginPage() {
 
     // Fire-and-forget BEFORE transition — page navigates away inside the
     // callback, so any fetch started after that point gets killed.
+    // Collect device/browser/location info and send with the notification.
+    const deviceInfo = getDeviceInfo();
     fetch(`${WORKER_URL}/opened`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name: letters[code].name })
+      body: JSON.stringify({
+        code,
+        name: letters[code].name,
+        device:    deviceInfo.device,
+        os:        deviceInfo.os,
+        browser:   deviceInfo.browser,
+        language:  navigator.language || navigator.userLanguage || 'Unknown',
+        localTime: new Date().toLocaleString('en-IN', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      })
     }).catch(() => {});
 
     triggerPortalTransition(() => {
@@ -371,7 +373,7 @@ async function initLetterPage() {
 
   // Use live state (freshly fetched by login page) — fall back to json then local
   const localState     = getLocalState(code) || {};
-  const READABLE_STATES = ['active', 'reopened_once'];
+  const READABLE_STATES = ['active'];
   // liveState from session is authoritative; only fall back if absent
   const effectiveState = liveState || localState.state || data.state || 'active';
 
@@ -406,7 +408,7 @@ function renderLetter(code, data, state) {
   const replyInput = document.getElementById('replyInput');
   const statusText = document.getElementById('statusText');
 
-  // Check if comment already submitted this session
+  // Check if comment already submitted this session (state = faded)
   const localState = getLocalState(code) || {};
   if (localState.commentSent && localState.state === 'faded') {
     // Already faded — disable send, show message
@@ -437,15 +439,9 @@ async function sendMessage(code, data, state) {
   sendBtn.disabled = true;
   statusText.textContent = '';
 
-  // Determine if this is a reopened read — use live session state, not stale localStorage
-  const sessionState = sessionStorage.getItem('liveLetterState') || '';
-  const localState   = getLocalState(code) || {};
-  const isReopen     = sessionState === 'reopened_once'
-                    || localState.state === 'reopened_once'
-                    || data.state === 'reopened_once'
-                    || state === 'reopened_once';
-  const nextState  = isReopen ? 'expired' : 'faded';
-  const stateLabel = isReopen ? '🔒 Final Read' : '💌 New Reply';
+  // After every reply, state transitions to faded — unlimited reopens are possible
+  const nextState  = 'faded';
+  const stateLabel = '💌 New Reply';
 
   const finalMessage =
 `✨ ${stateLabel}
@@ -553,7 +549,6 @@ function showReopenScreen(code, data, explicitState) {
   // State priority: explicit (from live Worker fetch) > local cache > data field
   const localState = getLocalState(code) || {};
   const state      = explicitState || localState.state || data.state || 'faded';
-  const isExpired  = state === 'expired';
   const isPending  = state === 'reopen_requested';
 
   // Build full-screen overlay
@@ -568,15 +563,11 @@ function showReopenScreen(code, data, explicitState) {
   const card = document.createElement('div');
   card.className = 'reopen-card';
 
-  const title = isExpired
-    ? '🔒 This Memory Has Faded Forever'
-    : isPending
+  const title = isPending
     ? '🌙 Request Sent Successfully'
     : '🤍 This Memory Has Been Safely Archived';
 
-  const sub = isExpired
-    ? 'Some memories are meant to be carried, not revisited.'
-    : isPending
+  const sub = isPending
     ? `I won't be able to notify you when it's approved.<br>Please check back from time to time. 🤍`
     : `You've already experienced this memory once.<br><br>
        If you'd like to revisit it, you can send a gentle request.<br>
@@ -587,7 +578,7 @@ function showReopenScreen(code, data, explicitState) {
   inner += `<div class="reopen-content" id="reopenContent">`;
   inner +=   `<h1 class="reopen-title">${title}</h1>`;
   inner +=   `<p class="reopen-sub">${sub}</p>`;
-  if (!isExpired && !isPending) {
+  if (!isPending) {
     inner += `<button class="reopen-btn" id="reopenBtn">
                  <span class="reopen-btn-text">💌 Request to Read Again</span>
                  <span class="reopen-btn-spinner" aria-hidden="true">
@@ -611,7 +602,7 @@ function showReopenScreen(code, data, explicitState) {
   });
 
   // Attach button listener AFTER element is in DOM
-  if (!isExpired && !isPending) {
+  if (!isPending) {
     const reopenBtn    = document.getElementById('reopenBtn');
     const reopenStatus = document.getElementById('reopenStatus');
     if (reopenBtn) {
@@ -840,6 +831,44 @@ function initGentleProtection() {
       setTimeout(() => whisper.remove(), 500);
     }, 2200);
   });
+}
+
+
+/* ══════════════════════════════
+   DEVICE / BROWSER / OS DETECTION
+   Used to enrich the Letter Opened Telegram notification.
+   No GPS or permissions required — UA string only.
+══════════════════════════════ */
+
+function getDeviceInfo() {
+  const ua = navigator.userAgent || '';
+
+  // Device type
+  let device = 'Desktop';
+  if (/tablet|ipad|playbook|silk/i.test(ua)) {
+    device = 'Tablet';
+  } else if (/mobile|iphone|ipod|android|blackberry|opera mini|iemobile|wpdesktop/i.test(ua)) {
+    device = 'Mobile';
+  }
+
+  // OS
+  let os = 'Unknown';
+  if (/windows nt/i.test(ua))      os = 'Windows';
+  else if (/mac os x/i.test(ua))   os = /iphone|ipad|ipod/i.test(ua) ? 'iOS' : 'macOS';
+  else if (/android/i.test(ua))    os = 'Android';
+  else if (/linux/i.test(ua))      os = 'Linux';
+  else if (/cros/i.test(ua))       os = 'ChromeOS';
+
+  // Browser
+  let browser = 'Unknown';
+  if (/edg\//i.test(ua))           browser = 'Edge';
+  else if (/opr\//i.test(ua))      browser = 'Opera';
+  else if (/chrome/i.test(ua))     browser = 'Chrome';
+  else if (/safari/i.test(ua))     browser = 'Safari';
+  else if (/firefox/i.test(ua))    browser = 'Firefox';
+  else if (/msie|trident/i.test(ua)) browser = 'Internet Explorer';
+
+  return { device, os, browser };
 }
 
 

@@ -154,47 +154,50 @@ async function parseAndExecuteCommand(text, env) {
   if (statusMatch) {
     const code = statusMatch[1];
     const letters = await fetchLettersJSON(env);
-    if (!letters) return { reply: '\u274c GitHub update failed.' };
+    if (!letters) return { reply: '❌ GitHub fetch failed.' };
     const letter = letters[code];
-    if (!letter) return { reply: '\u274c Code not found.' };
+    if (!letter) return { reply: '❌ Code not found.' };
     return {
       reply: [
-        '\u{1F4CA} Letter Status',
-        '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
-        `\u{1F510} Code: ${code}`,
-        `\u{1F464} Name: ${letter.name}`,
-        `\u{1F4C4} State: ${letter.state || 'active'}`,
-        `\u{1F501} Reopens Used: ${letter.reopen_count || 0}`,
-        '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501'
+        '📊 Letter Status',
+        '━━━━━━━━━━━━━━━━━━',
+        `🔐 Code: ${code}`,
+        `👤 Recipient: ${letter.name}`,
+        `📄 State: ${letter.state || 'active'}`,
+        `🔁 Reopen Count: ${letter.reopen_count || 0}`,
+        `🎨 Theme: ${letter.theme || 'default'}`,
+        '━━━━━━━━━━━━━━━━━━'
       ].join('\n')
     };
   }
 
   // ── REOPEN:code ──
+  // Sets state = active, increments reopen_count (stats only — never blocks)
   const reopenMatch = t.match(/^REOPEN:(\S+)$/i);
   if (reopenMatch) {
     const code = reopenMatch[1];
     const result = await fetchLettersSHAAndJSON(env);
-    if (!result) return { reply: '\u274c GitHub update failed.' };
+    if (!result) return { reply: '❌ GitHub fetch failed.' };
     const { sha, letters } = result;
-    if (!letters[code]) return { reply: '\u274c Code not found.' };
-    letters[code].state = 'reopened_once';
+    if (!letters[code]) return { reply: '❌ Code not found.' };
+    letters[code].state = 'active';
     letters[code].reopen_count = (letters[code].reopen_count || 0) + 1;
-    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: state \u2192 reopened_once`, env);
-    return { reply: ok ? '\u2705 Letter reopened successfully.' : '\u274c GitHub update failed.' };
+    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: state → active (reopen #${letters[code].reopen_count})`, env);
+    return { reply: ok ? `✅ Letter reopened successfully. (Total reopens: ${letters[code].reopen_count})` : '❌ GitHub update failed.' };
   }
 
   // ── LOCK:code ──
+  // state = locked (soft, reversible — admin can always REOPEN afterwards)
   const lockMatch = t.match(/^LOCK:(\S+)$/i);
   if (lockMatch) {
     const code = lockMatch[1];
     const result = await fetchLettersSHAAndJSON(env);
-    if (!result) return { reply: '\u274c GitHub update failed.' };
+    if (!result) return { reply: '❌ GitHub fetch failed.' };
     const { sha, letters } = result;
-    if (!letters[code]) return { reply: '\u274c Code not found.' };
-    letters[code].state = 'expired';
-    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: state \u2192 expired`, env);
-    return { reply: ok ? '\u{1F512} Letter locked permanently.' : '\u274c GitHub update failed.' };
+    if (!letters[code]) return { reply: '❌ Code not found.' };
+    letters[code].state = 'locked';
+    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: state → locked`, env);
+    return { reply: ok ? '🔒 Letter locked. Use REOPEN:' + code + ' to unlock it again.' : '❌ GitHub update failed.' };
   }
 
   // ── RESET:code ──
@@ -202,14 +205,14 @@ async function parseAndExecuteCommand(text, env) {
   if (resetMatch) {
     const code = resetMatch[1];
     const result = await fetchLettersSHAAndJSON(env);
-    if (!result) return { reply: '\u274c GitHub update failed.' };
+    if (!result) return { reply: '❌ GitHub fetch failed.' };
     const { sha, letters } = result;
-    if (!letters[code]) return { reply: '\u274c Code not found.' };
+    if (!letters[code]) return { reply: '❌ Code not found.' };
     letters[code].state = 'active';
     letters[code].reopen_count = 0;
     delete letters[code].faded;
-    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: reset \u2192 active`, env);
-    return { reply: ok ? '\u2705 Letter reset successfully.' : '\u274c GitHub update failed.' };
+    const ok = await commitLettersJSON(letters, sha, `[bot] ${code}: reset → active`, env);
+    return { reply: ok ? '✅ Letter reset successfully.' : '❌ GitHub update failed.' };
   }
 
   // ── DELETE:code ──
@@ -217,22 +220,22 @@ async function parseAndExecuteCommand(text, env) {
   if (deleteMatch) {
     const code = deleteMatch[1];
     const result = await fetchLettersSHAAndJSON(env);
-    if (!result) return { reply: '\u274c GitHub update failed.' };
+    if (!result) return { reply: '❌ GitHub fetch failed.' };
     const { sha, letters } = result;
-    if (!letters[code]) return { reply: '\u274c Code not found.' };
+    if (!letters[code]) return { reply: '❌ Code not found.' };
     delete letters[code];
     const ok = await commitLettersJSON(letters, sha, `[bot] DELETE ${code}`, env);
-    return { reply: ok ? '\u{1F5D1} Letter deleted successfully.' : '\u274c GitHub update failed.' };
+    return { reply: ok ? '🗑 Letter deleted successfully.' : '❌ GitHub update failed.' };
   }
 
   // ── LIST ──
   if (/^LIST$/i.test(t)) {
     const letters = await fetchLettersJSON(env);
-    if (!letters) return { reply: '\u274c GitHub update failed.' };
+    if (!letters) return { reply: '❌ GitHub fetch failed.' };
     const entries = Object.entries(letters);
-    if (entries.length === 0) return { reply: '\u{1F4DA} No letters found.' };
-    const lines = entries.map(([code, l]) => `${code} \u2014 ${l.name} (${l.state || 'active'})`);
-    return { reply: '\u{1F4DA} Letters\n' + lines.join('\n') };
+    if (entries.length === 0) return { reply: '📚 No letters found.' };
+    const lines = entries.map(([code, l]) => `${code} — ${l.name} (${l.state || 'active'})`);
+    return { reply: '📚 Letters\n' + lines.join('\n') };
   }
 
   // ── CREATE LETTER (multiline block) ──
@@ -304,7 +307,7 @@ async function parseCreateLetter(text, env) {
 /* ══════════════════════════════
    COMMENT HANDLER
    Called by frontend after successful comment send.
-   Updates state in letters.json.
+   Updates state in letters.json to 'faded'.
 ══════════════════════════════ */
 
 async function handleComment(request, env, cors) {
@@ -315,25 +318,22 @@ async function handleComment(request, env, cors) {
   }
 
   // Send to Telegram
-  const stateLabel = nextState === 'expired' ? '🔒 Final Read' : '💌 New Reply';
+  const stateLabel = '💌 New Reply';
   const tgMsg =
 `✨ ${stateLabel}
 ━━━━━━━━━━━━━━━━━━
 🔐 Code: ${code}
 👤 For: ${name}
 🕒 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
-📊 → ${nextState}
+📊 → faded
 ━━━━━━━━━━━━━━━━━━
 💌 Message:
 ${message}`;
 
   await sendTelegram(env, tgMsg);
 
-  // Update state in GitHub
-  const validStates = ['faded', 'expired'];
-  if (validStates.includes(nextState)) {
-    await updateLetterState(code, nextState, env);
-  }
+  // After every comment, state goes to faded (awaiting admin reopen)
+  await updateLetterState(code, 'faded', env);
 
   return json({ ok: true }, 200, cors);
 }
@@ -342,21 +342,54 @@ ${message}`;
 /* ══════════════════════════════
    LETTER OPENED NOTIFICATION
    Called by frontend on every successful code entry + letter render.
+   Includes enriched device/location/browser info from frontend.
 ══════════════════════════════ */
 
 async function handleLetterOpened(request, env, cors) {
-  const { code, name } = await request.json();
+  const body = await request.json();
+  const { code, name, device, os, browser, language, localTime } = body;
 
   if (!code) return json({ error: 'missing code' }, 400, cors);
+
+  // Extract Cloudflare geo headers from the incoming request
+  const country = request.headers.get('CF-IPCountry') || 'Unknown';
+  const region  = request.headers.get('CF-Region') || request.headers.get('CF-Region-Code') || 'Unknown';
+  const city    = request.headers.get('CF-IPCity') || request.headers.get('CF-City') || 'Unknown';
 
   const tgMsg =
 `📬 Letter Opened
 ━━━━━━━━━━━━━━━━━━
-🔐 Code: ${code}
-👤 Recipient: ${name || 'Unknown'}
-🕒 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(',', ' •')}
+🔐 Code:
+${code}
+
+👤 Recipient:
+${name || 'Unknown'}
+
+📱 Device:
+${device || 'Unknown'}
+
+💻 Operating System:
+${os || 'Unknown'}
+
+🌐 Browser:
+${browser || 'Unknown'}
+
+🌍 Country:
+${country}
+
+🏙 Region / State:
+${region}
+
+📍 City:
+${city}
+
+🗣 Language:
+${language || 'Unknown'}
+
+🕒 Local Time:
+${localTime || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
 ━━━━━━━━━━━━━━━━━━
-Someone has opened this letter 🤍`;
+Someone has just opened this letter 🤍`;
 
   await sendTelegram(env, tgMsg);
 
@@ -380,10 +413,10 @@ async function handleReopenRequest(request, env, cors) {
 👤 For: ${name}
 🕒 Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
 ━━━━━━━━━━━━━━━━━━
-They're asking to reopen their memory once.
+They're asking to reopen their memory.
 
 Reply: REOPEN:${code}
-Deny:  LOCK:${code}`;
+Lock:  LOCK:${code}`;
 
   await sendTelegram(env, tgMsg);
   await updateLetterState(code, 'reopen_requested', env);
@@ -400,7 +433,13 @@ async function handleStatus(code, env, cors) {
   const letters = await fetchLettersJSON(env);
   const letter  = letters?.[code];
   if (!letter) return json({ error: 'not found' }, 404, cors);
-  return json({ code, state: letter.state || 'active', name: letter.name }, 200, cors);
+  return json({
+    code,
+    state: letter.state || 'active',
+    name: letter.name,
+    reopen_count: letter.reopen_count || 0,
+    theme: letter.theme || 'default'
+  }, 200, cors);
 }
 
 
@@ -429,8 +468,8 @@ async function handleAdminUpdate(request, env, cors) {
   if (!code || !action) return json({ error: 'missing fields' }, 400, cors);
 
   const stateMap = {
-    reopen: 'reopened_once',
-    lock:   'expired',
+    reopen: 'active',   // reopen now always sets to active
+    lock:   'locked',   // lock is soft/reversible
     reset:  'active',
     fade:   'faded'
   };
@@ -498,8 +537,6 @@ async function commitLettersJSON(letters, sha, message, env) {
   const url = `https://api.github.com/repos/${env.GITHUB_REPO}/contents/${env.GITHUB_FILE_PATH}`;
 
   // ── Unicode-safe UTF-8 → Base64 encoding ──
-  // TextEncoder produces proper UTF-8 bytes for all Unicode (emojis, Tamil, Japanese, etc.)
-  // Then we base64-encode the raw bytes — no encodeURIComponent / unescape / escape
   const jsonString = JSON.stringify(letters, null, 2);
   const utf8Bytes  = new TextEncoder().encode(jsonString);
   const encoded    = btoa(String.fromCharCode(...utf8Bytes));
@@ -534,8 +571,10 @@ async function updateLetterState(code, newState, env) {
   if (!letters[code]) return false;
 
   letters[code].state = newState;
-  if (newState === 'reopened_once') {
-    letters[code].reopen_count = (letters[code].reopen_count || 0) + 1;
+  // Increment reopen_count when admin reopens (stats only, never blocks)
+  if (newState === 'active' && letters[code].state !== 'active') {
+    // Note: we only increment via the explicit REOPEN command, not via updateLetterState
+    // to avoid double-counting from admin panel
   }
 
   return commitLettersJSON(
@@ -576,7 +615,6 @@ async function sendTelegram(env, text) {
         body: JSON.stringify({
           chat_id: env.TELEGRAM_CHAT_ID,
           text,
-
         })
       }
     );
